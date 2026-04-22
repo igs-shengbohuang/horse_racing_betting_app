@@ -191,7 +191,7 @@
   #rro-track {
     width: 100%;
     position: relative;
-    height: 230px;
+    height: 300px;
     overflow: hidden;
     flex-shrink: 0;
   }
@@ -203,13 +203,22 @@
     white-space: nowrap;
     animation: rroHorseRun linear forwards;
   }
-  .rro-horse-emoji { font-size: 52px; line-height: 1; display: inline-block; transform: scaleX(-1); }
-  .rro-horse-name  { font-size: 13px; color: rgba(255,255,255,0.88); font-weight: 700; margin-top: 3px; }
-
-  @keyframes rroHorseRun {
-    0%   { transform: translateX(-180px); }
-    100% { transform: translateX(110vw);  }
+  .rro-horse-name {
+    font-size: 15px;
+    color: #fff;
+    font-weight: 800;
+    margin-top: 4px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    background: rgba(0,0,0,0.35);
+    padding: 2px 10px;
+    border-radius: 20px;
   }
+  .rro-rank-badge {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+
+  /* rroHorseRun — 由 JS Web Animations API 動態設定終點位置 */
 
   #rro-finish-line {
     position: absolute;
@@ -1019,27 +1028,39 @@ function renderAdminOddsTable() {
     quinPool[k] = (quinPool[k] || 0) + b.amount;
   });
 
-  const colH = `<th class="q-row-th" style="min-width:44px;"></th>` +
+  const nHorses = activeRace.horses.length; // 通常8
+  const labelPct = 14;
+  const cellPct  = ((100 - labelPct) / (nHorses - 1)).toFixed(2);
+  const colgroup = `<colgroup>
+    <col style="width:${labelPct}%;">
+    ${activeRace.horses.slice(1).map(()=>`<col style="width:${cellPct}%;">`).join('')}
+  </colgroup>`;
+
+  const colH = `<th style="min-width:0;"></th>` +
     activeRace.horses.slice(1).map((h, idx) => {
       const j = idx + 1;
-      return `<th class="q-col-th" style="font-size:calc(10px * var(--font-multiplier));text-align:center;padding:2px;color:#6b7280;font-weight:600;min-width:44px;">${idxToLetter(j)}<br><span style="font-size:calc(8px * var(--font-multiplier));font-weight:400;">${h.name.slice(0,4)}</span></th>`;
+      return `<th style="font-size:calc(16px * var(--font-multiplier));text-align:center;padding:3px 2px;color:#111827;font-weight:800;">${idxToLetter(j)}<br><span style="font-size:calc(12px * var(--font-multiplier));font-weight:700;color:#111827;">${h.name.slice(0,4)}</span></th>`;
     }).join('');
 
   const rows = activeRace.horses.slice(0, -1).map((h1, i) => {
     const cells = activeRace.horses.slice(1).map((h2, idx) => {
       const j = idx + 1;
-      if (j <= i) return `<td style="background:#f3f4f6;"></td>`;
+      // 空格子：完全透明，不顯示任何內容
+      if (j <= i) return `<td style="padding:2px;height:calc(52px * var(--font-multiplier));"></td>`;
       const key = quinellaKey(h1.id, h2.id);
       const qOdds = activeRace.quinellaOdds?.[key];
       const total = quinPool[key] || 0;
-      return `<td style="padding:2px;text-align:center;vertical-align:middle;">
-        <div style="background:var(--color-background-secondary);border-radius:8px;padding:5px 2px;">
+      return `<td style="padding:2px;text-align:center;vertical-align:middle;height:calc(52px * var(--font-multiplier));">
+        <div style="background:var(--color-background-secondary);border-radius:8px;padding:5px 2px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(48px * var(--font-multiplier));">
           <div style="font-size:calc(12px * var(--font-multiplier));font-weight:700;color:var(--color-text-primary);">${qOdds ? qOdds+'x' : '—'}</div>
           ${total > 0 ? `<div style="font-size:calc(9px * var(--font-multiplier));color:#2563eb;font-weight:600;">💰${total}</div>` : ''}
         </div>
       </td>`;
     }).join('');
-    return `<tr><td class="q-row-th" style="font-size:calc(10px * var(--font-multiplier));padding:2px 4px;white-space:nowrap;color:#6b7280;font-weight:600;vertical-align:middle;">${idxToLetter(i)}.${h1.name.slice(0,4)}</td>${cells}</tr>`;
+    return `<tr>
+      <td style="font-size:calc(16px * var(--font-multiplier));padding:2px 6px;white-space:nowrap;color:#111827;font-weight:800;vertical-align:middle;">${idxToLetter(i)}.${h1.name.slice(0,4)}</td>
+      ${cells}
+    </tr>`;
   }).join('');
 
   const totalWin = raceBets.filter(b=>b.type==='win').reduce((s,b)=>s+b.amount,0);
@@ -1052,6 +1073,7 @@ function renderAdminOddsTable() {
     <div class="section-title">🔗 連贏賠率表 &nbsp;<span style="font-size:calc(11px * var(--font-multiplier));font-weight:400;color:#6b7280;">總注額 ${totalQ}</span></div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
       <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+        ${colgroup}
         <thead><tr>${colH}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -1685,40 +1707,113 @@ function showRaceResultAnimation(race) {
   finLine.classList.remove('visible');
   card.classList.remove('visible');
 
-  // ── 建立馬匹動畫 ──
-  const horses = (race.horses || []).slice(0, 8);
-  const laneH  = 230 / (horses.length + 1);
+  // ── 只顯示冠軍和亞軍兩匹 ──
+  const twoHorses = [
+    { horse: race.horses.find(h=>h.id===race.result.first),  rank:0, badge:'🏆', duration:2.3 },
+    { horse: race.horses.find(h=>h.id===race.result.second), rank:1, badge:'🥈', duration:3.0 }
+  ].filter(d=>d.horse);
 
-  // 決定每匹馬的速度：冠軍最快（先到），依序略慢
-  const orderedIds = [race.result.first, race.result.second];
-  // 其餘隨機排序
-  const rest = horses.map(h=>h.id).filter(id=>!orderedIds.includes(id));
-  rest.sort(()=>Math.random()-0.5);
-  const finishOrder = [...orderedIds, ...rest]; // index 0 = 最快
+  // 馬匹配色：冠軍棕馬粉騎師 / 亞軍深灰馬藍騎師
+  const palette = [
+    { bc:'#8B4513', mc:'#5C2E00', jc:'#FF69B4', hc:'#C2185B' },
+    { bc:'#3A3A3A', mc:'#1a1a1a', jc:'#1565C0', hc:'#0D47A1' }
+  ];
 
-  horses.forEach((horse, i) => {
+  function _horseSVG(p, numLabel) {
+    return `<svg viewBox="0 0 230 115" xmlns="http://www.w3.org/2000/svg" width="230" height="115">
+      <!-- 尾巴 -->
+      <path d="M32,62 Q8,48 12,78 Q16,92 30,84" fill="${p.bc}" stroke="${p.bc}" stroke-width="3"/>
+      <!-- 身體 -->
+      <ellipse cx="105" cy="72" rx="70" ry="30" fill="${p.bc}"/>
+      <!-- 脖子 -->
+      <path d="M150,58 Q165,38 170,28" stroke="${p.bc}" stroke-width="22" stroke-linecap="round" fill="none"/>
+      <!-- 頭 -->
+      <ellipse cx="174" cy="23" rx="20" ry="13" fill="${p.bc}" transform="rotate(-15,174,23)"/>
+      <!-- 鼻孔 -->
+      <circle cx="185" cy="26" r="3" fill="${p.mc}"/>
+      <!-- 眼睛 -->
+      <circle cx="175" cy="17" r="3" fill="#111"/>
+      <circle cx="176" cy="16" r="1" fill="white"/>
+      <!-- 耳朵 -->
+      <polygon points="164,13 169,3 174,13" fill="${p.bc}"/>
+      <!-- 鬃毛 -->
+      <path d="M158,27 Q150,42 154,58" stroke="${p.mc}" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <!-- 前腿（伸展） -->
+      <path d="M148,95 L164,113" stroke="${p.bc}" stroke-width="10" stroke-linecap="round"/>
+      <path d="M130,95 L112,113" stroke="${p.bc}" stroke-width="10" stroke-linecap="round"/>
+      <!-- 後腿（伸展） -->
+      <path d="M72,95 L56,113" stroke="${p.bc}" stroke-width="10" stroke-linecap="round"/>
+      <path d="M58,95 L76,113" stroke="${p.bc}" stroke-width="10" stroke-linecap="round"/>
+      <!-- 蹄 -->
+      <ellipse cx="164" cy="113" rx="8" ry="3" fill="#111"/>
+      <ellipse cx="112" cy="113" rx="8" ry="3" fill="#111"/>
+      <ellipse cx="56"  cy="113" rx="8" ry="3" fill="#111"/>
+      <ellipse cx="76"  cy="113" rx="8" ry="3" fill="#111"/>
+      <!-- 號碼布 -->
+      <rect x="90" y="54" rx="5" ry="5" width="32" height="22" fill="white" opacity="0.95"/>
+      <text x="106" y="70" text-anchor="middle" font-size="14" font-weight="bold" fill="#222" font-family="Arial">${numLabel}</text>
+      <!-- 騎師身體 -->
+      <path d="M103,54 Q118,34 135,46 L130,62 Q114,68 103,54z" fill="${p.jc}"/>
+      <!-- 騎師頭盔 -->
+      <circle cx="136" cy="40" r="12" fill="${p.jc}"/>
+      <ellipse cx="136" cy="31" rx="13" ry="9" fill="${p.hc}"/>
+      <rect x="125" y="38" width="22" height="4" rx="2" fill="${p.hc}"/>
+      <!-- 騎師臉 -->
+      <circle cx="136" cy="43" r="8" fill="#FDBCB4"/>
+      <!-- 護目鏡 -->
+      <path d="M129,40 Q136,38 143,40" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <!-- 馬鞭 -->
+      <line x1="128" y1="54" x2="110" y2="80" stroke="#555" stroke-width="2"/>
+    </svg>`;
+  }
+
+  // 第一名上方，第二名下方；名字放 SVG 上方避免底部截斷
+  const laneTopList = [10, 148];
+  const horseWidth  = 230;
+
+  // 終點線在 right:15%，即 left:85% of trackW
+  // 第一名：馬身一半超過終點線（中心對齊終點線）
+  // 第二名：馬鼻剛好到終點線（右邊緣對齊終點線）
+  function _getStopX(rank) {
+    const trackW = track.offsetWidth || window.innerWidth;
+    const finishX = trackW * 0.85;
+    if (rank === 0) return Math.round(finishX - horseWidth / 2); // 中心在終點線
+    else            return Math.round(finishX - horseWidth - 10); // 馬鼻貼終點線前
+  }
+
+  twoHorses.forEach((d, i) => {
     const wrap = document.createElement('div');
     wrap.className = 'rro-horse-wrap';
+    wrap.style.animation = 'none';
+    wrap.style.top = laneTopList[i] + 'px';
+    wrap.style.transform = 'translateX(0px)'; // 起點 = 紅框左邊緣
 
-    // 垂直位置均分
-    const top = laneH * (i + 1) - 36;
-    wrap.style.top = top + 'px';
+    const horseIdx = race.horses.findIndex(h=>h.id===d.horse.id);
+    const numLabel = horseIdx >= 0 ? (horseIdx + 1) : '';
 
-    // 速度：根據名次順序決定動畫時長（名次越前越快）
-    const rank     = finishOrder.indexOf(horse.id);
-    const rankRatio = rank / Math.max(finishOrder.length - 1, 1); // 0=最快, 1=最慢
-    // 冠軍: 2.4s, 末位: 3.8s
-    const duration = 2.4 + rankRatio * 1.4;
-    // 延遲：全部同時出發（接近現實）
-    const delay = 0;
-
-    wrap.style.animationDuration = duration + 's';
-    wrap.style.animationDelay    = delay + 's';
-
+    // 名字在上方，badge 在名字左側
     wrap.innerHTML = `
-      <span class="rro-horse-emoji">🏇</span>
-      <span class="rro-horse-name">${horse.name}</span>`;
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+          <span style="font-size:18px;">${d.badge}</span>
+          <div class="rro-horse-name" style="margin:0;">${d.horse.name}</div>
+        </div>
+        ${_horseSVG(palette[i], numLabel)}
+      </div>`;
     track.appendChild(wrap);
+
+    requestAnimationFrame(() => {
+      const stopX = _getStopX(i);
+      wrap.animate([
+        { transform: 'translateX(0px)' },
+        { transform: `translateX(${stopX}px)` }
+      ], {
+        duration: d.duration * 1000,
+        delay: 0,
+        fill: 'forwards',
+        easing: 'linear'
+      });
+    });
   });
 
   // 顯示終點線（略作延遲讓馬先跑幾步）
