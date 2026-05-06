@@ -1,0 +1,3056 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>賽馬下注系統</title>
+<style>
+  :root {
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f3f4f6;
+    --color-background-tertiary: #e5e7eb;
+    --color-background-info: #eff6ff;
+    --color-background-success: #f0fdf4;
+    --color-text-primary: #111827;
+    --color-text-secondary: #4b5563;
+    --color-text-tertiary: #9ca3af;
+    --color-text-info: #2563eb;
+    --color-text-success: #16a34a;
+    --color-text-danger: #dc2626;
+    --color-border-secondary: #e5e7eb;
+    --color-border-tertiary: #f3f4f6;
+    --color-border-danger: #fca5a5;
+    --border-radius-sm: 8px;
+    --border-radius-md: 12px;
+    --border-radius-lg: 20px;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: var(--font-sans); background: #e5e7eb; color: var(--color-text-primary); }
+
+  /* 字體縮放 — 只放大文字，預設 2.5x，可由管理員調整 */
+  :root { --font-multiplier: 2.5; }
+
+  /* App Container — 平板橫向 4:3 為主，手機/直向也相容 */
+  .app { max-width: 960px; width: 100%; margin: 0 auto; min-height: 100vh; padding: 0 0 90px; background: var(--color-background-primary); box-shadow: 0 0 20px rgba(0,0,0,0.05); position: relative; }
+  @media (max-width: 600px) { .app { box-shadow: none; } }
+
+
+  /* 平板橫向：加大內距、字體、格子大小 */
+  @media (min-width: 768px) and (orientation: landscape) {
+    .page { padding: 0 24px; }
+    .race-name { font-size: calc(20px * var(--font-multiplier)); }
+    .race-meta { font-size: calc(14px * var(--font-multiplier)); }
+    .modal { max-width: 560px; }
+    /* 獨贏格子在橫向模式加大 */
+    .win-cell { padding: 10px 4px !important; }
+    .win-cell .wc-num { font-size: calc(13px * var(--font-multiplier)) !important; }
+    .win-cell .wc-odds { font-size: calc(16px * var(--font-multiplier)) !important; }
+    /* 連贏矩陣格子加大 */
+    .q-cell { padding: 7px 4px !important; font-size: calc(14px * var(--font-multiplier)) !important; }
+    .q-col-th { min-width: 58px !important; font-size: calc(12px * var(--font-multiplier)) !important; }
+    .q-row-th { font-size: calc(12px * var(--font-multiplier)) !important; padding: 2px 8px !important; }
+  }
+  
+  /* Navigation */
+  .tab-bar { display: flex; background: rgba(255,255,255,0.9); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--color-border-secondary); }
+  .tab { flex: 1; padding: 14px 8px; font-size: calc(14px * var(--font-multiplier)); text-align: center; cursor: pointer; color: var(--color-text-secondary); border-bottom: 2px solid transparent; transition: all .2s ease; }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  
+  /* Pages */
+  .page { display: none; padding: 0 16px; animation: fadeIn 0.2s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+  
+  .section-title { font-size: calc(13px * var(--font-multiplier)); font-weight: 600; color: var(--color-text-secondary); margin: 24px 0 12px; display: flex; align-items: center; gap: 8px; }
+  
+  /* Cards */
+  .race-card, .slip, .admin-card { background: var(--color-background-primary); border: 1px solid var(--color-border-secondary); border-radius: var(--border-radius-md); padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+  
+  /* Race Specific */
+  .race-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .race-name { font-size: calc(18px * var(--font-multiplier)); font-weight: 600; color: var(--color-text-primary); }
+  .race-status { font-size: calc(12px * var(--font-multiplier)); padding: 4px 10px; border-radius: 20px; font-weight: 600; }
+  .status-open { background: var(--color-background-success); color: var(--color-text-success); }
+  .status-closed { background: var(--color-background-tertiary); color: var(--color-text-secondary); }
+  .status-finished { background: var(--color-background-info); color: var(--color-text-info); }
+  .race-meta { font-size: calc(13px * var(--font-multiplier)); color: var(--color-text-tertiary); margin-bottom: 16px; }
+  
+  .horse-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--color-border-tertiary); }
+  .horse-num { width: 26px; height: 26px; border-radius: 8px; background: var(--color-background-secondary); font-size: calc(13px * var(--font-multiplier)); font-weight: 600; display: flex; align-items: center; justify-content: center; color: var(--color-text-secondary); flex-shrink: 0; }
+  .horse-name { font-size: calc(15px * var(--font-multiplier)); font-weight: 500; color: var(--color-text-primary); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  
+  .horse-pool { flex: 1; font-size: calc(12px * var(--font-multiplier)); font-weight: 500; color: var(--color-text-secondary); text-align: right; padding-right: 8px; }
+  .horse-odds { font-size: calc(15px * var(--font-multiplier)); font-weight: 600; color: var(--color-text-primary); min-width: 44px; text-align: right; }
+  
+  /* Buttons */
+  .btn-bet { font-size: calc(13px * var(--font-multiplier)); font-weight: 500; padding: 6px 14px; border: 1px solid var(--color-border-secondary); border-radius: var(--border-radius-sm); cursor: pointer; background: var(--color-background-primary); color: var(--color-text-primary); transition: all .2s; }
+  .btn-bet:hover { border-color: var(--primary); color: var(--primary); }
+  .btn-bet.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+  
+  .btn-primary { width: 100%; padding: 14px; background: var(--primary); color: #fff; border: none; border-radius: var(--border-radius-sm); font-size: calc(15px * var(--font-multiplier)); font-weight: 600; cursor: pointer; margin-top: 12px; transition: background .2s; }
+  .btn-primary:active { background: var(--primary-hover); }
+  .btn-sm { padding: 8px 16px; border: 1px solid var(--color-border-secondary); border-radius: var(--border-radius-sm); font-size: calc(13px * var(--font-multiplier)); font-weight: 500; cursor: pointer; background: var(--color-background-primary); color: var(--color-text-primary); }
+  
+  /* Form Inputs */
+  input, select { width: 100%; padding: 10px 14px; border: 1px solid var(--color-border-secondary); border-radius: var(--border-radius-sm); font-size: calc(14px * var(--font-multiplier)); background: var(--color-background-primary); color: var(--color-text-primary); outline: none; transition: border-color .2s; }
+  input:focus, select:focus { border-color: var(--primary); }
+  .form-row { margin-bottom: 14px; }
+  .form-row label { font-size: calc(13px * var(--font-multiplier)); font-weight: 500; color: var(--color-text-secondary); display: block; margin-bottom: 6px; }
+  
+  /* Slips & History */
+  .slip-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .slip-race { font-size: calc(13px * var(--font-multiplier)); color: var(--color-text-secondary); margin-bottom: 8px; }
+  .slip-horse { font-size: calc(16px * var(--font-multiplier)); font-weight: 600; color: var(--color-text-primary); }
+  .slip-type { font-size: calc(13px * var(--font-multiplier)); color: var(--color-text-secondary); margin-bottom: 8px; }
+  
+  .history-row { padding: 12px 0; border-bottom: 1px solid var(--color-border-tertiary); }
+  .history-meta { font-size: calc(12px * var(--font-multiplier)); color: var(--color-text-secondary); margin-bottom: 4px; }
+  .history-main { display: flex; justify-content: space-between; align-items: center; }
+  .history-desc { font-size: calc(15px * var(--font-multiplier)); font-weight: 500; color: var(--color-text-primary); }
+  .history-amount { font-size: calc(15px * var(--font-multiplier)); font-weight: 600; }
+  
+  /* Leaderboard */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .stat-card { background: var(--color-background-info); border-radius: var(--border-radius-md); padding: 16px; text-align: center; }
+  .stat-label { font-size: calc(13px * var(--font-multiplier)); color: var(--color-text-info); margin-bottom: 4px; }
+  .stat-val { font-size: calc(24px * var(--font-multiplier)); font-weight: 600; color: var(--color-text-info); }
+  .leaderboard-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--color-border-tertiary); }
+  .lb-rank { width: 28px; font-size: calc(15px * var(--font-multiplier)); font-weight: 600; color: var(--color-text-tertiary); text-align: center; }
+  .lb-avatar { width: 36px; height: 36px; border-radius: 50%; font-size: calc(14px * var(--font-multiplier)); font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .lb-name { flex: 1; font-size: calc(15px * var(--font-multiplier)); font-weight: 500; color: var(--color-text-primary); }
+  .lb-pts { font-size: calc(15px * var(--font-multiplier)); font-weight: 600; color: var(--color-text-primary); }
+  .lb-pts.positive { color: var(--color-text-success); }
+  .lb-pts.negative { color: var(--color-text-danger); }
+  
+  /* Utils */
+  .winner-badge { font-size: calc(11px * var(--font-multiplier)); padding: 2px 8px; border-radius: 12px; background: #fef08a; color: #854d0e; font-weight: 600; }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--color-text-tertiary); font-size: calc(15px * var(--font-multiplier)); }
+  .user-bar { display: flex; justify-content: space-between; align-items: center; padding: 20px 0 10px; }
+  
+  /* Modal */
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: flex-end; justify-content: center; animation: fadeInBg 0.2s; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--color-background-primary); border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0; padding: 24px 20px 40px; width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; box-shadow: 0 -10px 40px rgba(0,0,0,0.15); animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes fadeInBg { from { opacity: 0; } to { opacity: 1; } }
+  .modal-title { font-size: calc(18px * var(--font-multiplier)); font-weight: 600; margin-bottom: 20px; color: var(--color-text-primary); display: flex; justify-content: space-between; align-items: center; }
+  .close-btn { background: var(--color-background-secondary); border: none; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: calc(18px * var(--font-multiplier)); cursor: pointer; color: var(--color-text-secondary); }
+  .bet-type-tabs { display: flex; gap: 10px; margin-bottom: 20px; background: var(--color-background-secondary); padding: 4px; border-radius: var(--border-radius-sm); }
+  .bet-type-tab { flex: 1; padding: 10px; border-radius: 6px; border: none; font-size: calc(14px * var(--font-multiplier)); font-weight: 500; text-align: center; cursor: pointer; color: var(--color-text-secondary); background: transparent; transition: all .2s; }
+  .bet-type-tab.active { background: var(--color-background-primary); color: var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip { padding: 8px 14px; border: 1px solid var(--color-border-secondary); border-radius: 20px; font-size: calc(13px * var(--font-multiplier)); font-weight: 500; cursor: pointer; color: var(--color-text-secondary); background: var(--color-background-primary); transition: all .15s; }
+  .chip:active { background: var(--color-background-secondary); }
+  .payout-row { display: flex; justify-content: space-between; font-size: calc(14px * var(--font-multiplier)); padding: 16px 0 0; border-top: 1px solid var(--color-border-tertiary); margin-top: 10px; }
+  .payout-label { color: var(--color-text-secondary); font-weight: 500; }
+  .payout-val { font-weight: 600; color: var(--color-text-success); font-size: calc(16px * var(--font-multiplier)); }
+  
+  /* Toast */
+  .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px); background: rgba(17,24,39,0.9); backdrop-filter: blur(4px); color: #fff; padding: 12px 24px; border-radius: 30px; font-size: calc(14px * var(--font-multiplier)); font-weight: 500; opacity: 0; transition: all .3s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: none; white-space: nowrap; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Login */
+  .login-screen { padding: 60px 20px; text-align: center; }
+  .login-screen h2 { font-size: calc(28px * var(--font-multiplier)); font-weight: 700; margin-bottom: 8px; color: var(--color-text-primary); }
+  .login-screen p { font-size: calc(15px * var(--font-multiplier)); color: var(--color-text-secondary); margin-bottom: 40px; }
+  .user-list { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 24px; text-align: left; }
+  .user-btn { padding: 16px; border: 1px solid var(--color-border-secondary); border-radius: var(--border-radius-md); cursor: pointer; background: var(--color-background-primary); display: flex; align-items: center; gap: 14px; transition: border-color .2s; }
+  .user-btn:hover { border-color: var(--primary); }
+  .user-btn .avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: calc(16px * var(--font-multiplier)); font-weight: 600; flex-shrink: 0; }
+  .user-btn .info .name { font-size: calc(16px * var(--font-multiplier)); font-weight: 600; color: var(--color-text-primary); margin-bottom: 2px; }
+  .user-btn .info .role { font-size: calc(12px * var(--font-multiplier)); color: var(--color-text-secondary); }
+  .add-user-row { display: flex; gap: 10px; }
+  .admin-badge { background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-size: calc(10px * var(--font-multiplier)); margin-left: 6px; }
+
+  /* Admin Details */
+  .result-select { margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
+  .result-select label { font-size: calc(14px * var(--font-multiplier)); font-weight: 500; color: var(--color-text-secondary); width: 60px; flex-shrink: 0; }
+  .horse-input-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .horse-input-row input.odds-in { width: 80px; flex: none; }
+
+  /* ══════════════════════════════════════════════
+     🏁 比賽結果動畫 Overlay
+  ══════════════════════════════════════════════ */
+  #race-result-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: linear-gradient(160deg, #0f0c29 0%, #302b63 50%, #1a1040 100%);
+    overflow: hidden;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  #race-result-overlay.rro-active { display: flex; }
+
+  #rro-track {
+    width: 100%;
+    position: relative;
+    height: 300px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .rro-horse-wrap {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    white-space: nowrap;
+    animation: rroHorseRun linear forwards;
+  }
+  .rro-horse-name {
+    font-size: 15px;
+    color: #fff;
+    font-weight: 800;
+    margin-top: 4px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    background: rgba(0,0,0,0.35);
+    padding: 2px 10px;
+    border-radius: 20px;
+  }
+  .rro-rank-badge {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+
+  /* rroHorseRun — 由 JS Web Animations API 動態設定終點位置 */
+
+  #rro-finish-line {
+    position: absolute;
+    right: 15%;
+    top: 0; bottom: 0;
+    width: 5px;
+    background: repeating-linear-gradient(
+      to bottom, #ffffff 0px, #ffffff 14px, #000000 14px, #000000 28px
+    );
+    opacity: 0;
+    transition: opacity 0.5s;
+    box-shadow: 0 0 20px 5px rgba(255,230,50,0.6);
+  }
+  #rro-finish-line.visible { opacity: 1; }
+
+  #rro-result-card {
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 28px 32px 24px;
+    text-align: center;
+    max-width: 420px;
+    width: 88%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    opacity: 0;
+    transform: translateY(40px) scale(0.92);
+    transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1);
+    flex-shrink: 0;
+    margin-top: 6px;
+  }
+  #rro-result-card.visible { opacity: 1; transform: translateY(0) scale(1); }
+
+  .rro-flag     { font-size: 44px; display: block; margin-bottom: 4px; }
+  .rro-headline { font-size: calc(18px * var(--font-multiplier)); font-weight: 800; color: #111; margin-bottom: 18px; }
+  .rro-place    { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 14px; margin-bottom: 10px; }
+  .rro-place-1  { background: linear-gradient(90deg,#fef9c3,#fde68a); }
+  .rro-place-2  { background: linear-gradient(90deg,#f3f4f6,#e5e7eb); }
+  .rro-place-icon  { font-size: calc(26px * var(--font-multiplier)); line-height: 1; flex-shrink: 0; }
+  .rro-place-info  { text-align: left; }
+  .rro-place-label { font-size: calc(10px * var(--font-multiplier)); color: #6b7280; font-weight: 700; letter-spacing: 0.5px; }
+  .rro-place-name  { font-size: calc(16px * var(--font-multiplier)); font-weight: 700; color: #111; line-height: 1.3; }
+  .rro-close-btn {
+    margin-top: 10px; padding: 14px 0; background: #2563eb; color: #fff;
+    border: none; border-radius: 12px; font-size: calc(15px * var(--font-multiplier));
+    font-weight: 700; cursor: pointer; transition: background .2s; width: 100%;
+  }
+  .rro-close-btn:active { background: #1d4ed8; }
+
+  .rro-confetti {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    animation: rroConfettiFall linear forwards;
+    pointer-events: none;
+  }
+  @keyframes rroConfettiFall {
+    0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
+    100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+  }
+
+  /* ===== 轉盤覆蓋層 ===== */
+  #wheel-overlay {
+    display: none; position: fixed; inset: 0;
+    background: radial-gradient(circle at 50% 50%, #e0e5ec 0%, #c1c8d4 100%);
+    z-index: 8000; overflow: hidden; touch-action: none;
+    flex-direction: column; align-items: center; justify-content: center;
+  }
+  #wheel-overlay.open { display: flex; }
+  #wheel-back-btn {
+    position: absolute; top: 20px; left: 20px;
+    background: #fff; color: #333; border: 2px solid #aaa;
+    padding: 10px 18px; border-radius: 25px; font-size: 15px; font-weight: bold;
+    cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.15); z-index: 500;
+  }
+  #wheel-info-btn {
+    position: absolute; top: 20px; right: 20px;
+    background: #fff; color: #333; border: 2px solid #aaa;
+    padding: 10px 15px; border-radius: 25px; font-size: 15px; font-weight: bold;
+    cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.15); z-index: 500;
+  }
+  #wheel-info-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center;
+    z-index: 9100; opacity: 1; transition: opacity 0.3s ease;
+  }
+  #wheel-info-modal.hidden { opacity: 0; pointer-events: none; }
+  #wheel-info-modal .wh-modal-content {
+    background: #fff; width: 90%; max-width: 420px; border-radius: 20px;
+    padding: 30px; position: relative; box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+    max-height: 85vh; overflow-y: auto;
+  }
+  #jackpot-banner {
+    background: linear-gradient(135deg, #c71585, #ff1493); color: #fff;
+    padding: 10px 25px; border-radius: 30px; font-size: 18px; font-weight: 900;
+    letter-spacing: 2px; margin-bottom: 30px; box-shadow: 0 5px 15px rgba(199,21,133,0.4);
+    border: 2px solid #fff; text-align: center; animation: pulseBanner 2s infinite; z-index: 100;
+  }
+  @keyframes pulseBanner {
+    0%,100% { transform: scale(1);    box-shadow: 0 5px 15px rgba(199,21,133,0.4); }
+    50%      { transform: scale(1.05); box-shadow: 0 8px 20px rgba(199,21,133,0.6); }
+  }
+  #wheel-and-result {
+    display: flex; flex-direction: row; align-items: center;
+    justify-content: center; gap: 50px; width: 100%; position: relative;
+  }
+  #wh-container {
+    position: relative; width: 600px; height: 600px;
+    user-select: none; cursor: grab; flex-shrink: 0;
+  }
+  #wh-container:active { cursor: grabbing; }
+  #wh-pointer-container {
+    position: absolute; top: -15px; left: 50%; transform: translateX(-50%);
+    width: 36px; height: 40px; z-index: 200; pointer-events: none;
+  }
+  #wh-pointer-base { position: absolute; top: 0; left: 15px; width: 6px; height: 25px; background-color: #555; border-radius: 3px; }
+  #wh-pointer {
+    position: absolute; top: 0; left: 0; width: 0; height: 0;
+    border-left: 18px solid transparent; border-right: 18px solid transparent;
+    border-top: 40px solid #fff; border-radius: 2px; transform-origin: 50% 0%;
+    transition: transform 0.05s ease-out; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+  }
+  #wh-outer {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 50%;
+    border: 20px solid #fff; box-shadow: 0 15px 35px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.5);
+    overflow: hidden; box-sizing: border-box;
+    background: conic-gradient(#2c3e50 0deg 45deg, #34495e 45deg 90deg, #2c3e50 90deg 135deg, #34495e 135deg 180deg, #2c3e50 180deg 225deg, #34495e 225deg 270deg, #2c3e50 270deg 315deg, #34495e 315deg 360deg);
+  }
+  #wh-inner {
+    position: absolute; top: 11%; left: 11%; width: 78%; height: 78%; border-radius: 50%;
+    border: 8px solid #fff; box-shadow: 0 0 25px rgba(0,0,0,0.8); overflow: hidden; box-sizing: border-box;
+    background: conic-gradient(
+      #c71585 0deg 20deg,  #1b5e20 20deg 40deg,  #b71c1c 40deg 60deg,
+      #1b5e20 60deg 80deg, #b71c1c 80deg 100deg, #1b5e20 100deg 120deg,
+      #b71c1c 120deg 140deg, #1b5e20 140deg 160deg, #b71c1c 160deg 180deg,
+      #fbc02d 180deg 200deg, #1b5e20 200deg 220deg, #b71c1c 220deg 240deg,
+      #1b5e20 240deg 260deg, #b71c1c 260deg 280deg, #1b5e20 280deg 300deg,
+      #b71c1c 300deg 320deg, #1b5e20 320deg 340deg, #b71c1c 340deg 360deg
+    );
+  }
+  .wh-outer-border { position: absolute; top: 0; left: calc(50% - 2px); width: 4px; height: 100%; background-color: #fff; z-index: 5; }
+  .wh-inner-border { position: absolute; top: 0; left: calc(50% - 1.5px); width: 3px; height: 100%; background-color: #fff; z-index: 5; }
+  .wh-outer-text {
+    position: absolute; top: 15px; left: 50%; transform-origin: 53% 270px;
+    font-size: 22px; font-weight: 900; letter-spacing: 1px;
+    z-index: 10; pointer-events: none; color: #fff;
+    text-shadow: 1px 1px 4px rgba(0,0,0,0.8); white-space: nowrap; text-align: center;
+  }
+  .wh-inner-text {
+    position: absolute; top: 30px; left: 50%; transform-origin: 50% 200px;
+    writing-mode: vertical-rl; text-orientation: upright;
+    font-size: 15px; font-weight: 900; line-height: 1.1;
+    text-align: center; z-index: 10; pointer-events: none; color: #fff;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.8); white-space: nowrap;
+  }
+  .wh-peg {
+    position: absolute; top: 10px; left: calc(60% - 57px);
+    width: 8px; height: 8px; background: radial-gradient(circle, #fff 0%, #aaa 60%, #555 100%);
+    border-radius: 50%; border: 1px solid #333; transform-origin: 50% 275px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.6); z-index: 20;
+  }
+  .wh-winning-glow { animation: whTextGlow 0.6s infinite alternate ease-in-out !important; }
+  @keyframes whTextGlow {
+    0%   { text-shadow: 0 0 5px #fff, 0 0 10px #fff; color: #fff; }
+    100% { text-shadow: 0 0 10px #fff, 0 0 20px #ffeb3b, 0 0 30px #ffeb3b; color: #fffde7; }
+  }
+  #wh-result-card {
+    width: 320px; padding: 30px 20px; border-radius: 20px; text-align: center;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+    transform: translateX(-30px) scale(0.9); opacity: 0;
+    transition: all 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    border: 4px solid #fff; pointer-events: none; background-color: #333;
+  }
+  #wh-result-card.show { transform: translateX(0) scale(1); opacity: 1; pointer-events: auto; }
+  .wh-res-horse { font-size: 22px; font-weight: bold; margin: 0 0 5px 0; opacity: 0.9; }
+  .wh-res-title { font-size: 32px; font-weight: 900; margin: 0; color: #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); }
+  .wh-res-desc  { font-size: 16px; margin-top: 8px; font-weight: bold; color: rgba(255,255,255,0.9); }
+  #wh-reset-btn {
+    position: absolute; bottom: 30px; right: 30px; width: 65px; height: 65px;
+    border-radius: 50%; background: #fff; color: #333; border: 3px solid #555;
+    font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.25); z-index: 500;
+  }
+  #jp-cheat-btn {
+    position: absolute; bottom: 110px; right: 30px; width: 65px; height: 65px;
+    border-radius: 50%; background: #333; color: #fff; border: 3px solid #555;
+    font-size: 22px; cursor: pointer; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 1px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.4); z-index: 500;
+    transition: all 0.25s; user-select: none;
+  }
+  #jp-cheat-btn.active {
+    background: linear-gradient(135deg, #c71585, #ff4500);
+    border-color: #ffd700;
+    box-shadow: 0 0 18px rgba(199,21,133,0.8), 0 5px 20px rgba(0,0,0,0.4);
+    animation: cheatPulse 1.2s infinite alternate;
+  }
+  @keyframes cheatPulse {
+    from { box-shadow: 0 0 12px rgba(199,21,133,0.7), 0 5px 20px rgba(0,0,0,0.4); }
+    to   { box-shadow: 0 0 28px rgba(255,69,0,1),    0 5px 20px rgba(0,0,0,0.4); }
+  }
+  #jp-cheat-btn .cheat-label { font-size: 9px; font-weight: 900; letter-spacing: 0.5px; opacity: 0.85; }
+  #wheel-overlay #wh-game-panel { display: flex; flex-direction: column; align-items: center; position: relative; width: 100%; }
+  @media (max-width: 900px) {
+    #wheel-and-result { flex-direction: column; gap: 0; }
+    #wh-container { width: 380px; height: 380px; }
+    .wh-outer-text { top: 18px; transform-origin: 50% 172px; font-size: 16px; }
+    .wh-inner-text { top: 30px; transform-origin: 50% 118px; font-size: 13px; }
+    .wh-peg { transform-origin: 50% 190px; }
+    #wh-result-card {
+      position: absolute; top: 50%; left: 50%; margin: 0;
+      width: 85%; max-width: 340px; padding: 25px 15px;
+      transform: translate(-50%, -40%) scale(0.8); z-index: 400;
+    }
+    #wh-result-card.show { transform: translate(-50%, -50%) scale(1); }
+  }
+  @media (max-height: 720px) {
+    #wh-container { width: 320px; height: 320px; }
+    .wh-outer-text { top: 15px; transform-origin: 50% 145px; font-size: 14px; }
+    .wh-inner-text { top: 25px; transform-origin: 50% 100px; font-size: 11px; }
+    .wh-peg { transform-origin: 50% 160px; }
+  }
+  /* ===== JACKPOT 玩家小轉盤 ===== */
+  #jp-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 3000;
+    background: rgba(0,0,0,0.92); display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    animation: jpFadeIn 0.35s ease;
+  }
+  @keyframes jpFadeIn { from { opacity:0; transform: scale(0.9); } to { opacity:1; transform: scale(1); } }
+  #jp-overlay.open { display: flex; }
+  #jp-title {
+    font-size: 30px; font-weight: 900; color: #ffd700; letter-spacing: 3px;
+    text-shadow: 0 0 20px #ffd700, 0 0 40px #ff8c00; margin-bottom: 18px; text-align: center;
+    animation: jpTitlePulse 1.2s infinite alternate ease-in-out;
+  }
+  @keyframes jpTitlePulse {
+    from { text-shadow: 0 0 10px #ffd700, 0 0 20px #ff8c00; }
+    to   { text-shadow: 0 0 25px #ffd700, 0 0 50px #ff4500, 0 0 70px #ff4500; }
+  }
+  #jp-sub-title { font-size: 14px; color: #ccc; margin-bottom: 16px; text-align: center; }
+  #jp-wheel-wrap {
+    position: relative; width: 300px; height: 300px;
+    filter: drop-shadow(0 0 20px rgba(255,215,0,0.5));
+  }
+  #jp-canvas { display: block; border-radius: 50%; cursor: pointer; }
+  #jp-pointer-top {
+    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 14px solid transparent; border-right: 14px solid transparent;
+    border-top: 28px solid #ffd700;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.9)); z-index: 10;
+  }
+  #jp-spin-hint { font-size: 13px; color: #888; margin-top: 10px; }
+  #jp-result {
+    margin-top: 20px; font-size: 28px; font-weight: 900; color: #fff;
+    text-align: center; min-height: 44px;
+    text-shadow: 0 0 15px #ffd700, 0 0 30px #ffd700;
+    transition: opacity 0.4s;
+  }
+  #jp-close-btn {
+    margin-top: 18px; padding: 13px 36px;
+    background: linear-gradient(135deg, #ffd700, #ff8c00);
+    color: #000; border: none; border-radius: 30px;
+    font-size: 18px; font-weight: 900; cursor: pointer;
+    box-shadow: 0 4px 20px rgba(255,215,0,0.5); display: none;
+    transition: transform 0.1s;
+  }
+  #jp-close-btn:hover { transform: scale(1.05); }
+  #jp-spin-btn {
+    margin-top: 14px; padding: 11px 30px;
+    background: #fff; color: #333; border: none; border-radius: 30px;
+    font-size: 16px; font-weight: bold; cursor: pointer;
+    box-shadow: 0 4px 15px rgba(255,255,255,0.2);
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <div id="login-view"></div>
+  <div id="main-view" style="display:none">
+    <div class="tab-bar">
+      <div class="tab active" data-tab="races">賽事</div>
+      <div class="tab" data-tab="slip">投注單</div>
+      <div class="tab" data-tab="board">排行榜</div>
+      <div class="tab" data-tab="history">紀錄</div>
+      <div class="tab" id="admin-tab" data-tab="admin" style="display:none">管理</div>
+    </div>
+    <div id="page-races" class="page active"></div>
+    <div id="page-slip" class="page"></div>
+    <div id="page-board" class="page"></div>
+    <div id="page-history" class="page"></div>
+    <div id="page-admin" class="page"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="name-modal">
+  <div class="modal" style="padding-bottom: 24px;">
+    <div class="modal-title">
+      設定專屬名稱
+      <button class="close-btn" onclick="document.getElementById('name-modal').classList.remove('open')">×</button>
+    </div>
+    <p style="font-size:calc(14px * var(--font-multiplier)); color:var(--color-text-secondary); margin-bottom:20px; line-height:1.5;">
+      您擁有 <b style="color:var(--color-text-primary);">一次</b> 修改顯示名稱的機會。<br>確認後無法再次變更，不想改可直接關閉。
+    </p>
+    <div class="form-row">
+      <input type="text" id="new-player-name" placeholder="請輸入您想要的名稱..." maxlength="10" style="font-size:calc(16px * var(--font-multiplier)); padding:12px 14px;">
+    </div>
+    <button class="btn-primary" onclick="confirmNameChange()">確認修改（用掉唯一機會）</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="bet-modal">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modal-title-text">下注</span>
+      <button class="close-btn" onclick="closeModal()">×</button>
+    </div>
+    <div class="bet-type-tabs">
+      <button class="bet-type-tab active" data-type="win" onclick="selectBetType('win',this)">獨贏</button>
+      <button class="bet-type-tab" data-type="quinella" onclick="selectBetType('quinella',this)">連贏 (Quinella)</button>
+    </div>
+
+    <!-- 獨贏：單一馬匹顯示 -->
+    <div id="modal-win-horse-row" class="form-row" style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <label>選擇馬匹</label>
+        <div id="modal-horse" style="font-size:calc(18px * var(--font-multiplier));font-weight:600;color:var(--color-text-primary)"></div>
+      </div>
+      <div style="text-align:right">
+        <label>賠率</label>
+        <div id="modal-win-odds" style="font-size:calc(18px * var(--font-multiplier));font-weight:600;color:var(--primary)"></div>
+      </div>
+    </div>
+
+    <!-- 連贏：選兩匹馬 + 賠率 -->
+    <div id="modal-quinella-section" style="display:none;">
+      <div style="background:var(--color-background-info);border-radius:var(--border-radius-sm);padding:10px 14px;margin-bottom:12px;font-size:calc(13px * var(--font-multiplier));color:var(--color-text-info);line-height:1.5;">
+        猜中<b>前兩名（任意順序）</b>即算中獎，不須猜對誰第1誰第2。
+      </div>
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;" class="form-row">
+          <label>🏇 賽馬一</label>
+          <!-- hidden select 保留供 JS 讀值；顯示用 div 呈現鎖定馬名 -->
+          <select id="modal-horse1" onchange="updatePayout()" style="display:none;"></select>
+          <div id="modal-horse1-label" style="font-size:calc(16px * var(--font-multiplier));font-weight:700;color:var(--color-text-primary);padding:10px 14px;background:var(--color-background-secondary);border-radius:var(--border-radius-sm);border:1px solid var(--color-border-secondary);"></div>
+        </div>
+        <div style="flex:1;" class="form-row">
+          <label>🏇 賽馬二</label>
+          <select id="modal-horse2" onchange="updatePayout()" style="display:none;"></select>
+          <div id="modal-horse2-label" style="font-size:calc(16px * var(--font-multiplier));font-weight:700;color:var(--color-text-primary);padding:10px 14px;background:var(--color-background-secondary);border-radius:var(--border-radius-sm);border:1px solid var(--color-border-secondary);"></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:calc(14px * var(--font-multiplier));padding:4px 0 8px;">
+        <span style="color:var(--color-text-secondary);font-weight:500;">組合賠率</span>
+        <span id="modal-quinella-odds" style="font-size:calc(18px * var(--font-multiplier));font-weight:600;color:var(--primary)"></span>
+      </div>
+    </div>
+    <div class="form-row" style="margin-top: 24px;">
+      <label>下注點數</label>
+      <div class="chip-row">
+        <button class="chip" onclick="addChip(10)">+10</button>
+        <button class="chip" onclick="addChip(50)">+50</button>
+        <button class="chip" onclick="addChip(100)">+100</button>
+        <button class="chip" onclick="addChip(500)">+500</button>
+        <button class="chip" onclick="setChip(0)">清除</button>
+      </div>
+      <input type="number" id="modal-amount" placeholder="輸入點數..." min="1" oninput="updatePayout()" style="font-size:calc(16px * var(--font-multiplier)); padding:12px 14px;">
+    </div>
+    <div class="payout-row">
+      <span class="payout-label">預計最高回報</span>
+      <span class="payout-val" id="modal-payout">—</span>
+    </div>
+    <button class="btn-primary" onclick="confirmBet()">確認下注</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 連線中畫面 -->
+<div id="loading-overlay" style="position:fixed;inset:0;background:#fff;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;">
+  <div style="font-size:calc(64px * var(--font-multiplier));line-height:1;">🐎</div>
+  <div style="font-size:calc(18px * var(--font-multiplier));font-weight:700;color:#111827;">賽馬預測系統</div>
+  <div style="font-size:calc(14px * var(--font-multiplier));color:#9ca3af;">正在連接資料庫...</div>
+</div>
+
+<!-- Firebase SDK (即時資料庫) -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+<script>
+const COLORS = ['#dbeafe','#dcfce7','#fee2e2','#fef3c7','#e0e7ff','#fce7f3','#f3f4f6'];
+const TEXT_COLORS = ['#1e40af','#166534','#991b1b','#92400e','#3730a3','#9d174d','#1f2937'];
+
+// ── 預設馬匹（可在管理頁直接修改，自動存入 localStorage）──
+const _BUILTIN_HORSES = [
+  {name:'龍騰御影', odds:2.5},
+  {name:'凱旋之巔', odds:3.8},
+  {name:'閃電極境', odds:5.0},
+  {name:'疾風鳴奏', odds:1.8},
+  {name:'月下流金', odds:4.2},
+  {name:'星軌漫步', odds:6.5},
+  {name:'不滅雄心', odds:3.0},
+  {name:'破曉先鋒', odds:8.0}
+];
+function loadDefaultHorses() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('hrapp_default_horses') || 'null');
+    if (saved && saved.length === _BUILTIN_HORSES.length) return saved;
+  } catch(e) {}
+  return _BUILTIN_HORSES.map(h=>({...h}));
+}
+function saveDefaultHorses() {
+  localStorage.setItem('hrapp_default_horses', JSON.stringify(DEFAULT_HORSES));
+  SETTINGS_REF.child('horses').set(DEFAULT_HORSES).catch(e => console.warn('馬匹設定 Firebase 儲存失敗', e));
+}
+function updateDefaultHorseName(idx, val) {
+  const v = val.trim();
+  if (!v) return;
+  DEFAULT_HORSES[idx].name = v;
+  saveDefaultHorses();
+}
+function updateDefaultHorseOdds(idx, val) {
+  const v = parseFloat(val);
+  if (isNaN(v) || v < 1.1) return;
+  DEFAULT_HORSES[idx].odds = v;
+  saveDefaultHorses();
+}
+let DEFAULT_HORSES = loadDefaultHorses();
+
+// ── 預設二重彩賠率（儲存在 localStorage，不被 clearAllData 清除）──
+function loadDefaultQuinella() {
+  try { return JSON.parse(localStorage.getItem('hrapp_default_quinella') || '{}') || {}; } catch(e) { return {}; }
+}
+function saveDefaultQuinella() {
+  try { localStorage.setItem('hrapp_default_quinella', JSON.stringify(_DEFAULT_QUINELLA)); } catch(e) {}
+  SETTINGS_REF.child('quinella').set(_DEFAULT_QUINELLA).catch(e => console.warn('二重彩設定 Firebase 儲存失敗', e));
+}
+let _DEFAULT_QUINELLA = loadDefaultQuinella();
+
+// 確保 _DEFAULT_QUINELLA 有所有馬匹配對的預設值（以 DEFAULT_HORSES 為基準）
+function ensureDefaultQuinella() {
+  DEFAULT_HORSES.forEach((h1,i) => {
+    DEFAULT_HORSES.forEach((h2,j) => {
+      if (j <= i) return;
+      const key = [i, j].join('_');
+      if (_DEFAULT_QUINELLA[key] == null) {
+        _DEFAULT_QUINELLA[key] = Math.round((h1.odds + h2.odds) / 2 * 10) / 10;
+      }
+    });
+  });
+}
+ensureDefaultQuinella();
+
+// ── 賽事前綴名稱（持久化）──
+function getDefaultRacePrefix() {
+  return localStorage.getItem('hrapp_race_prefix') || '';
+}
+function saveDefaultRacePrefix(val) {
+  localStorage.setItem('hrapp_race_prefix', val);
+}
+
+// ── 自動計算下一場場次（中文數字）──
+const _CN_NUM = ['零','一','二','三','四','五','六','七','八','九','十',
+  '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
+function nextRaceIndex() {
+  // 場次 = 已建立賽事數 + 1
+  const n = (state.races ? state.races.length : 0) + 1;
+  return _CN_NUM[n] || String(n);
+}
+
+// ── 預設新玩家積分 ──
+function getDefaultPoints() {
+  const v = parseInt(localStorage.getItem('hrapp_default_points'));
+  return (isNaN(v) || v <= 0) ? 1000 : v;
+}
+function saveDefaultPoints(val) {
+  const v = parseInt(val);
+  if (!isNaN(v) && v > 0) localStorage.setItem('hrapp_default_points', String(v));
+}
+
+let state = {
+  users: [
+    {id:'admin',name:'管理員',role:'admin',points:0,color:0, nameChanged: true},
+    {id:'u1',name:'第一組',role:'player',points:1000,color:1, nameChanged: false},
+    {id:'u2',name:'第二組',role:'player',points:1000,color:2, nameChanged: false},
+    {id:'u3',name:'第三組',role:'player',points:1000,color:3, nameChanged: false},
+    {id:'u4',name:'第四組',role:'player',points:1000,color:4, nameChanged: false},
+    {id:'u5',name:'第五組',role:'player',points:1000,color:5, nameChanged: false},
+  ],
+  races: [
+    {id:'r1',name:'第一場 精英盃',time:'14:30',status:'open',
+     horses: DEFAULT_HORSES.map((h, i) => ({ id: 'h' + i, ...h })),
+     result:null}
+  ],
+  bets: [],
+  currentUser: null,
+  activeRaceId: 'r1', 
+  pendingBet: null,
+  currentBetType: 'win',
+  pendingBets: [],  // 待送出清單（只存本機，不同步 Firebase）
+  requirePassword: true,  // 是否需要密碼（管理員可關閉方便測試）
+};
+
+// ============================================================
+// 🔥 FIREBASE 設定 (請將以下內容替換為你的 Firebase 專案資訊)
+// 說明：前往 Firebase Console → 專案設定 → 你的應用程式 → 複製 firebaseConfig
+// ============================================================
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDSr2fV77aoS0IPbX6mqOUVJuIQl03FVTg",
+  authDomain: "horse-racing-betting.firebaseapp.com",
+  databaseURL: "https://horse-racing-betting-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "horse-racing-betting",
+  storageBucket: "horse-racing-betting.firebasestorage.app",
+  messagingSenderId: "326399773206",
+  appId: "1:326399773206:web:2a04497c3b7204a8d28337"
+};
+// ============================================================
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+const STATE_REF    = db.ref('hrapp');
+const SETTINGS_REF = db.ref('hrapp_settings'); // 全域設定（不被 clearAllData 清除）
+
+// ─── 文字縮放：每個裝置獨立儲存，預設 2.5x（只縮放文字，不縮放佈局） ──────
+function getFontScale() {
+  const v = parseFloat(localStorage.getItem('hrapp_font_scale'));
+  return (isNaN(v) || v<=0) ? 2.5 : v;
+}
+function applyFontScale() {
+  const s = getFontScale();
+  document.documentElement.style.setProperty('--font-multiplier', s);
+  const label = document.getElementById('ui-scale-label');
+  if(label) label.textContent = s.toFixed(1) + 'x';
+  const slider = document.getElementById('ui-scale-slider');
+  if(slider && parseFloat(slider.value) !== s) slider.value = s;
+}
+function setFontScale(v) {
+  const val = Math.max(1.0, Math.min(3.5, parseFloat(v)||2.5));
+  localStorage.setItem('hrapp_font_scale', String(val));
+  applyFontScale();
+}
+window.addEventListener('resize', applyFontScale);
+// 初次載入即套用（在 DOM ready 前先設 CSS 變數，避免閃爍）
+document.documentElement.style.setProperty('--font-multiplier', getFontScale());
+
+// save() 現在寫入 Firebase（讓所有人即時同步）
+// currentUser 仍存在 localStorage（因為每個裝置的登入者不同）
+function save() {
+  STATE_REF.set({
+    users: state.users,
+    races: state.races,
+    bets: state.bets,
+    activeRaceId: state.activeRaceId !== undefined ? state.activeRaceId : null,
+    requirePassword: state.requirePassword !== false
+  }).catch(err => console.error('Firebase 儲存失敗:', err));
+  try { localStorage.setItem('hrapp_local', JSON.stringify({currentUser: state.currentUser, pendingBets: state.pendingBets||[]})); } catch(e) {}
+}
+
+function savePending() {
+  try {
+    const local = JSON.parse(localStorage.getItem('hrapp_local')||'{}');
+    local.pendingBets = state.pendingBets || [];
+    localStorage.setItem('hrapp_local', JSON.stringify(local));
+  } catch(e) {}
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tab));
+  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id==='page-'+tab));
+  renderPage(tab);
+}
+
+document.querySelector('.tab-bar').addEventListener('click', e=>{
+  const t = e.target.closest('.tab');
+  if(t) switchTab(t.dataset.tab);
+});
+
+function avatar(user) {
+  const c = COLORS[user.color%COLORS.length];
+  const tc = TEXT_COLORS[user.color%TEXT_COLORS.length];
+  return `<div class="avatar" style="background:${c};color:${tc}">${user.name[0]}</div>`;
+}
+
+function renderLogin() {
+  const v = document.getElementById('login-view');
+  v.innerHTML = `<div class="login-screen">
+    <h2>🐎 賽馬預測系統</h2>
+    <p>選擇你的帳號開始遊戲</p>
+    <div class="user-list">${state.users.map(u=>`
+      <button class="user-btn" onclick="login('${u.id}')">
+        ${avatar(u)}
+        <div class="info">
+          <div class="name">${u.name} ${u.role==='admin'?'<span class="admin-badge">管理員</span>':''}</div>
+          ${u.role==='admin' ? `<div class="role">後台管理員</div>` : `<div class="role">目前餘額：${u.points} pts</div>`}
+        </div>
+      </button>`).join('')}
+    </div>
+    <div class="add-user-row">
+      <input type="text" id="new-user-name" placeholder="新增玩家名稱...">
+      <button class="btn-primary" style="margin-top:0; width:auto;" onclick="addUser()">加入</button>
+    </div>
+  </div>`;
+}
+
+function addUser() {
+  const input = document.getElementById('new-user-name');
+  const name = input.value.trim();
+  if(!name) return;
+  const id = 'u'+Date.now();
+  state.users.push({id,name,role:'player',points:1000,color:state.users.length%COLORS.length, nameChanged: true});
+  save(); input.value=''; renderLogin();
+  toast('玩家已新增');
+}
+
+function login(userId) {
+  const user = state.users.find(u=>u.id===userId);
+  
+  if (user && user.role === 'admin' && state.requirePassword !== false) {
+    const pwd = prompt('請輸入管理員密碼：');
+    if (pwd !== '2012') {
+      toast('密碼錯誤！');
+      return;
+    }
+  }
+
+  state.currentUser = userId;
+  save();
+  enterMainView(user);
+}
+
+function confirmNameChange() {
+  const user = getUser();
+  const inputVal = document.getElementById('new-player-name').value.trim();
+  if(!inputVal) { toast('請輸入名稱'); return; }
+  user.name = inputVal;
+  user.nameChanged = true;
+  save();
+  document.getElementById('name-modal').classList.remove('open');
+  toast('✅ 名稱已更新！');
+  renderRaces(); // 刷新顯示新名字
+}
+
+function openNameModal() {
+  const user = getUser();
+  document.getElementById('new-player-name').value = user.name;
+  document.getElementById('name-modal').classList.add('open');
+}
+
+function enterMainView(user) {
+  document.getElementById('login-view').style.display='none';
+  document.getElementById('main-view').style.display='block';
+
+  // 切換 slip tab 標籤：管理員看「賠率表」，玩家看「投注單」
+  const slipTab = document.querySelector('.tab[data-tab="slip"]');
+  if (slipTab) slipTab.textContent = (user && user.role==='admin') ? '賠率表' : '投注單';
+
+
+  if(user && user.role==='admin') {
+    document.getElementById('admin-tab').style.display='';
+  } else {
+    document.getElementById('admin-tab').style.display='none';
+  }
+  switchTab('races');
+}
+
+function logout() {
+  if (state.requirePassword !== false) {
+    const pwd = prompt('請輸入登出密碼：');
+    if (pwd !== '2012') {
+      toast('密碼錯誤！無法登出');
+      return;
+    }
+  }
+
+  state.currentUser = null;
+  state.pendingBets = [];
+  try { localStorage.removeItem('hrapp_local'); } catch(e) {}
+  document.getElementById('main-view').style.display='none';
+  document.getElementById('login-view').style.display='';
+  renderLogin();
+}
+
+function getUser() { return state.users.find(u=>u.id===state.currentUser); }
+
+function renderPage(tab) {
+  if(tab==='races') renderRaces();
+  if(tab==='slip') renderSlip();
+  if(tab==='board') renderBoard();
+  if(tab==='history') renderHistory();
+  if(tab==='admin') renderAdmin();
+}
+
+function renderRaces() {
+  const user = getUser();
+  const el = document.getElementById('page-races');
+  const activeRace = state.races.find(r => r.id === state.activeRaceId);
+  let raceHtml = '';
+
+  if (activeRace) {
+    raceHtml = raceCard(activeRace);
+  } else {
+    raceHtml = '<div class="empty-state">🏆 目前沒有進行中的賽事<br><span style="font-size:calc(13px * var(--font-multiplier)); margin-top:8px; display:inline-block;">請等待管理員開放</span></div>';
+  }
+  
+  // 依據是否為管理員決定要不要顯示餘額
+  const _pendingTotal = (state.pendingBets||[]).reduce((s,b)=>s+b.amount,0);
+  const _available = user.points - _pendingTotal;
+  const userPointsHtml = user.role === 'admin'
+    ? `<div style="font-size:calc(13px * var(--font-multiplier)); color:var(--color-text-secondary); margin-right:8px;">管理員模式</div>`
+    : `<div style="background:var(--color-background-secondary); padding: 6px 12px; border-radius: 20px; font-size:calc(13px * var(--font-multiplier)); color:var(--color-text-secondary);">可用 <b style="color:var(--color-text-primary);font-size:calc(14px * var(--font-multiplier));">${_available}</b>${_pendingTotal>0?` <span style="color:#d97706;font-size:calc(12px * var(--font-multiplier));">（預留${_pendingTotal}）</span>`:''}</div>`;
+
+  const _pendingCount = (state.pendingBets||[]).length;
+  const submitBarHtml = (user.role!=='admin' && _pendingCount>0) ? `
+    <div style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:448px;z-index:100;background:#fffbeb;border:2px solid #d97706;border-radius:16px;padding:12px 16px;box-shadow:0 4px 20px rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div>
+        <div style="font-size:calc(13px * var(--font-multiplier));color:#92400e;font-weight:600;">📝 待送出（${_pendingCount} 注）</div>
+        <div style="font-size:calc(12px * var(--font-multiplier));color:#d97706;margin-top:2px;">預留 ${_pendingTotal} pts，送出前可修改</div>
+      </div>
+      <button onclick="submitAllBets()" style="background:#d97706;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:calc(14px * var(--font-multiplier));font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">送出 →</button>
+    </div>` : '';
+
+  el.innerHTML = `
+    <div class="user-bar">
+      <div style="font-size:calc(16px * var(--font-multiplier));font-weight:600;display:flex;align-items:center;gap:8px;">
+        ${avatar(user)}
+        ${user.name}
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        ${userPointsHtml}
+        ${user.role==='player'&&!user.nameChanged ? `<button class="btn-sm" style="background:#eff6ff;border-color:#bfdbfe;color:#2563eb;" onclick="openNameModal()">✏️ 改名</button>` : ''}
+        ${user.role==='player' ? `<button class="btn-sm" style="background:var(--color-background-secondary); border:none;" onclick="logout()">登出</button>` : ''}
+      </div>
+    </div>
+    <div style="margin-bottom: 8px;"></div>
+    ${raceHtml}
+    ${submitBarHtml}
+  `;
+}
+
+function raceCard(race) {
+  const statusLabel = {open:'🟢 開放下注',closed:'🔴 截止下注',finished:'🏁 已完結'};
+  const statusClass  = {open:'status-open',closed:'status-closed',finished:'status-finished'};
+  const user = getUser();
+  const isAdmin = user.role === 'admin';
+  const canBet  = race.status === 'open' && !isAdmin;
+
+  // 結果標記
+  const resultMap = {};
+  if(race.status==='finished'&&race.result){
+    resultMap[race.result.first]='🏆'; resultMap[race.result.second]='🥈';
+  }
+
+  // ── 管理員視圖：馬匹列表 ──
+  if(isAdmin){
+    const pools={};
+    state.bets.filter(b=>b.raceId===race.id).forEach(b=>{ pools[b.horseId]=(pools[b.horseId]||0)+b.amount; });
+    return `<div class="race-card" style="box-shadow:0 4px 12px rgba(0,0,0,0.05);border:none;">
+      <div class="race-header"><div class="race-name">${race.name}</div><span class="race-status ${statusClass[race.status]}">${statusLabel[race.status]}</span></div>
+      <div class="race-meta">發車時間：${race.time}</div>
+      ${race.horses.map((h,i)=>`<div class="horse-row">
+        <div class="horse-num">${i+1}</div>
+        <div class="horse-name">${h.name}${resultMap[h.id]?` <span class="winner-badge">${resultMap[h.id]}</span>`:''}</div>
+        <div class="horse-pool">押注:${pools[h.id]||0}</div>
+        <div class="horse-odds">${h.odds}x</div>
+      </div>`).join('')}
+      ${race.status==='finished'&&race.result?`<div style="background:#f0fdf4;border-radius:10px;padding:10px 14px;margin-top:10px;font-size:calc(14px * var(--font-multiplier));">🏆 ${race.horses.find(h=>h.id===race.result.first)?.name} &nbsp;🥈 ${race.horses.find(h=>h.id===race.result.second)?.name}</div>`:''}
+    </div>`;
+  }
+
+  // ── 玩家視圖：可點擊賭盤 ──
+  const myLocked  = state.bets.filter(b=>b.userId===state.currentUser&&b.raceId===race.id&&!b.settled);
+  const myPending = (state.pendingBets||[]).filter(b=>b.raceId===race.id);
+
+  // 獨贏格子
+  const winCells = race.horses.map((h,i)=>{
+    const lk = myLocked.find(b=>b.horseId===h.id&&b.type==='win');
+    const pd = myPending.find(b=>b.horseId===h.id&&b.type==='win');
+    let bg='#eff6ff',tc='#1e40af',br='#bfdbfe',cur=canBet?'pointer':'default';
+    if(pd)      { bg='#d97706';tc='#fff';br='#d97706'; }
+    else if(lk) { bg='#2563eb';tc='#fff';br='#2563eb';cur='default'; }
+    else if(!canBet){ bg='#f3f4f6';tc='#9ca3af';br='#e5e7eb'; }
+    const oc = canBet&&!lk ? `onclick="openBet('${race.id}','${h.id}','win')"` : '';
+    return `<div class="win-cell" style="background:${bg};color:${tc};border:1.5px solid ${br};border-radius:8px;padding:6px 3px;text-align:center;cursor:${cur};flex:1;min-width:0;user-select:none;" ${oc}>
+      <div class="wc-num" style="font-size:calc(9px * var(--font-multiplier));font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px;">${resultMap[h.id]||''}${h.name}</div>
+      <div class="wc-odds" style="font-size:calc(13px * var(--font-multiplier));font-weight:700;line-height:1.2;">${h.odds}x</div>
+      ${pd?`<div style="font-size:calc(10px * var(--font-multiplier));margin-top:1px;">✏️${pd.amount}</div>`:''}
+      ${lk?`<div style="font-size:calc(10px * var(--font-multiplier));margin-top:1px;">✔${lk.amount}</div>`:''}
+    </div>`;
+  }).join('');
+
+  // 連贏矩陣（上三角）
+  // 第1匹馬不會出現在「右側欄」→ 欄位標頭跳過 j=0
+  // 第8匹馬不會出現在「左側行」→ 行標籤跳過 i=7（最後一行）
+  const colH = `<th class="q-row-th" style="min-width:50px;"></th>` + race.horses.slice(1).map((h,idx)=>{
+    const j = idx+1;
+    return `<th class="q-col-th" style="font-size:calc(11px * var(--font-multiplier));text-align:center;padding:2px;color:#111827;font-weight:700;min-width:48px;background:rgba(255,255,255,0.82);border-radius:6px;">${idxToLetter(j)}<br><span style="font-size:calc(9px * var(--font-multiplier));font-weight:500;">${h.name.slice(0,4)}</span></th>`;
+  }).join('');
+  const qRows = race.horses.slice(0,-1).map((h1,i)=>{
+    // 欄從 j=1 開始（跳過 j=0），對應 horses[1..7]
+    const cells = race.horses.slice(1).map((h2,idx)=>{
+      const j = idx+1;
+      if(j<=i) return `<td></td>`;
+      const lk = myLocked.find(b=>b.type==='quinella'&&[b.horseId,b.horseId2].includes(h1.id)&&[b.horseId,b.horseId2].includes(h2.id));
+      // 找出所有符合此組合的 pending bets（支援多筆）
+      const pdList = myPending.filter(b=>b.type==='quinella'&&[b.horseId,b.horseId2].includes(h1.id)&&[b.horseId,b.horseId2].includes(h2.id));
+      const pd = pdList[0]||null;
+      const odds = getQuinellaOdds(race, h1.id, h2.id);
+      const qArr = '';
+      let bg='#f5f3ff',tc='#5b21b6',br='#ddd6fe',cur=canBet?'pointer':'default';
+      if(pd)       { bg='#d97706';tc='#fff';br='#d97706'; }
+      else if(lk)  { bg='#7c3aed';tc='#fff';br='#7c3aed';cur='default'; }
+      else if(!canBet){ bg='#f9fafb';tc='#9ca3af';br='#e5e7eb'; }
+      const oc = canBet ? `onclick="openBet('${race.id}','${h1.id}','quinella','${h2.id}')"` : '';
+      return `<td style="padding:2px;"><div class="q-cell" style="background:${bg};color:${tc};border:1.5px solid ${br};border-radius:6px;padding:5px 2px;text-align:center;cursor:${cur};font-size:calc(12px * var(--font-multiplier));font-weight:700;user-select:none;" ${oc}>${odds}x${qArr}${pd?`<br><span style="font-size:calc(10px * var(--font-multiplier));">✏️${pd.amount}${pdList.length>1?` +${pdList.length-1}`:''}</span>`:''}${lk&&!pd?`<br><span style="font-size:calc(10px * var(--font-multiplier));">✔${lk.amount}</span>`:''}</div></td>`;
+    }).join('');
+    return `<tr><td class="q-row-th" style="font-size:calc(11px * var(--font-multiplier));padding:2px 6px;white-space:nowrap;color:#111827;font-weight:700;vertical-align:middle;background:rgba(255,255,255,0.82);border-radius:6px;">${idxToLetter(i)}.${h1.name.slice(0,4)}</td>${cells}</tr>`;
+  }).join('');
+
+  const resultBanner = race.status==='finished'&&race.result
+    ? `<div style="background:#f0fdf4;border-radius:10px;padding:10px 14px;margin-top:12px;font-size:calc(14px * var(--font-multiplier));">🏆 ${race.horses.find(h=>h.id===race.result.first)?.name} &nbsp;🥈 ${race.horses.find(h=>h.id===race.result.second)?.name}</div>` : '';
+
+  // ─────────────────────────────── DUMMY marker to replace old code ──
+  const _PLAYER_VIEW_MARKER_ = true;
+  return `<div class="race-card" style="box-shadow:0 4px 12px rgba(0,0,0,0.05);border:none;padding:14px;">
+    <div class="race-header"><div class="race-name">${race.name}</div><span class="race-status ${statusClass[race.status]}">${statusLabel[race.status]}</span></div>
+    <div class="race-meta" style="margin-bottom:12px;">發車時間：${race.time}</div>
+    <div style="position:relative;border-radius:12px;overflow:hidden;padding:12px 10px 10px;margin-bottom:4px;">
+      <!-- 背景圖層 -->
+      <div style="position:absolute;inset:0;background-image:url('racing-bg.jpg');background-size:cover;background-position:center;z-index:0;"></div>
+      <!-- 半透明遮罩，讓按鈕更清晰 -->
+      <div style="position:absolute;inset:0;background:rgba(255,255,255,0.45);z-index:1;"></div>
+      <!-- 內容層 -->
+      <div style="position:relative;z-index:2;">
+        <div style="font-size:calc(12px * var(--font-multiplier));font-weight:700;color:#111827;margin-bottom:6px;display:inline-block;background:rgba(255,255,255,0.85);padding:2px 8px;border-radius:6px;">🏆 獨贏（點格下注）</div>
+        <div style="display:flex;gap:4px;margin-bottom:14px;">${winCells}</div>
+        <div style="font-size:calc(12px * var(--font-multiplier));font-weight:700;color:#111827;margin-bottom:4px;display:inline-block;background:rgba(255,255,255,0.85);padding:2px 8px;border-radius:6px;">🔗 連贏（點格下注）</div>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+          <table style="border-collapse:separate;border-spacing:0;width:100%;"><thead><tr>${colH}</tr></thead><tbody>${qRows}</tbody></table>
+        </div><!-- /overflow -->
+      </div><!-- /content z-index:2 -->
+    </div><!-- /bg wrapper -->
+    ${resultBanner}
+  </div>`;
+}
+
+function openBet(raceId, horseId, type='win', horseId2=null) {
+  const race = state.races.find(r=>r.id===raceId);
+  const horse = race.horses.find(h=>h.id===horseId);
+  state.pendingBet = {raceId, horseId};
+
+  document.getElementById('modal-title-text').textContent = race.name;
+  document.getElementById('modal-horse').textContent = horse.name;
+  document.getElementById('modal-payout').textContent = '—';
+
+  // 填充連贏下拉選單
+  const optHtml = race.horses.map(h=>`<option value="${h.id}">${h.name}</option>`).join('');
+  document.getElementById('modal-horse1').innerHTML = optHtml;
+  document.getElementById('modal-horse2').innerHTML = optHtml;
+
+  // 若呼叫時已指定 type，直接用傳入的
+  let initialType = type;
+  state.currentBetType = initialType;
+
+  const existingWin = (state.pendingBets||[]).find(b=>b.raceId===raceId&&b.horseId===horseId&&b.type==='win');
+
+  if(initialType === 'quinella') {
+    // 用 canonical key 精確比對組合，避免誤抓其他組合的資料
+    const pairKey = horseId2 ? quinellaKey(horseId, horseId2) : null;
+    const existingQ = pairKey
+      ? (state.pendingBets||[]).find(b=>b.raceId===raceId&&b.type==='quinella'&&quinellaKey(b.horseId,b.horseId2)===pairKey)
+      : (state.pendingBets||[]).find(b=>b.raceId===raceId&&b.type==='quinella'&&(b.horseId===horseId||b.horseId2===horseId));
+    if(existingQ) {
+      document.getElementById('modal-horse1').value = existingQ.horseId;
+      document.getElementById('modal-horse2').value = existingQ.horseId2;
+      document.getElementById('modal-amount').value = existingQ.amount;
+    } else {
+      // 新組合：直接用點擊格子傳入的兩匹馬（鎖定，不可更改）
+      document.getElementById('modal-horse1').value = horseId;
+      document.getElementById('modal-horse2').value = horseId2 || (race.horses.find(h=>h.id!==horseId)?.id || '');
+      document.getElementById('modal-amount').value = '';
+    }
+    // 把選中的馬名填入顯示用 label（select 隱藏，使用者看到的是鎖定的馬名）
+    const h1Name = race.horses.find(h=>h.id===document.getElementById('modal-horse1').value)?.name || '';
+    const h2Name = race.horses.find(h=>h.id===document.getElementById('modal-horse2').value)?.name || '';
+    document.getElementById('modal-horse1-label').textContent = h1Name;
+    document.getElementById('modal-horse2-label').textContent = h2Name;
+  } else {
+    document.getElementById('modal-horse1').value = horseId;
+    const other = race.horses.find(h=>h.id!==horseId);
+    if(other) document.getElementById('modal-horse2').value = other.id;
+    document.getElementById('modal-amount').value = existingWin ? existingWin.amount : '';
+  }
+
+  document.querySelectorAll('.bet-type-tab').forEach(t=>t.classList.toggle('active',t.dataset.type===initialType));
+  document.getElementById('modal-win-horse-row').style.display  = initialType==='win'    ? '' : 'none';
+  document.getElementById('modal-quinella-section').style.display = initialType==='quinella' ? '' : 'none';
+
+  // 點格子時 type 已固定，隱藏切換 tab；直接在投注單點修改時才顯示 tab
+  const tabsEl = document.querySelector('.bet-type-tabs');
+  if(tabsEl) tabsEl.style.display = 'none';
+
+  updatePayout();
+  document.getElementById('bet-modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('bet-modal').classList.remove('open'); }
+
+function selectBetType(type, btn) {
+  state.currentBetType = type;
+  document.querySelectorAll('.bet-type-tab').forEach(t=>t.classList.toggle('active',t===btn));
+  document.getElementById('modal-win-horse-row').style.display  = type==='win'    ? '' : 'none';
+  document.getElementById('modal-quinella-section').style.display = type==='quinella' ? '' : 'none';
+  updatePayout();
+}
+
+function addChip(n) {
+  const inp = document.getElementById('modal-amount');
+  inp.value = (parseInt(inp.value)||0) + n;
+  updatePayout();
+}
+function setChip(n) {
+  document.getElementById('modal-amount').value = n||'';
+  updatePayout();
+}
+
+// 取得二重彩賠率：優先用管理員設定的自訂值，否則用公式預設值
+// 連贏用 canonical key（排序後），A+B 和 B+A 是同一組合
+function quinellaKey(h1Id, h2Id) { return [h1Id, h2Id].sort().join('_'); }
+
+// 把索引轉成字母標籤：0→A, 1→B, 2→C ...
+function idxToLetter(i) { return String.fromCharCode(65 + i); }
+
+// ===== 動態賠率計算 =====
+// 起點 = 管理員預設賠率；有下注後依彩池分布比例調整
+// 連贏賠率 = (冠軍賠率 + 亞軍賠率) / 2，隨下注同步浮動
+function calcDynamicOdds(race) {
+  const horses = race.horses || [];
+  const n = horses.length;
+  if (n === 0) return { win: {}, quinella: {} };
+
+  // ── 統計當局獨贏下注量 ──
+  const winVol = {};
+  horses.forEach(h => { winVol[h.id] = 0; });
+  let totalWin = 0;
+  (state.bets || []).filter(b => b.raceId === race.id && b.type === 'win' && !b.settled).forEach(b => {
+    if (winVol[b.horseId] !== undefined) { winVol[b.horseId] += b.amount; totalWin += b.amount; }
+  });
+
+  // ── 沒有下注：直接回傳管理員預設（不做任何轉換） ──
+  if (totalWin === 0) {
+    const dynWin = {}, dynQuin = {};
+    horses.forEach((h, i) => {
+      const minFloor = Math.round((1.1 + i * 0.1) * 10) / 10;
+      dynWin[h.id] = Math.max(minFloor, h.odds);
+    });
+    horses.forEach((h1, i) => horses.forEach((h2, j) => {
+      if (j <= i) return;
+      const minQ = Math.round((1.2 + Math.max(i, j) * 0.08) * 10) / 10;
+      const baseQ = Math.round((dynWin[h1.id] + dynWin[h2.id]) / 2 * 10) / 10;
+      dynQuin[quinellaKey(h1.id, h2.id)] = Math.max(minQ, baseQ);
+    }));
+    return { win: dynWin, quinella: dynQuin };
+  }
+
+  // ── 有下注：以「預設賠率的隱含機率比」為基準，按實際下注比例調整 ──
+  // 基準份額：各馬按管理員賠率推算的下注比（歸一化，代表「公平分布」）
+  const baseShare = {};
+  let sumBase = 0;
+  horses.forEach(h => { const p = 1 / Math.max(1.01, h.odds); baseShare[h.id] = p; sumBase += p; });
+  horses.forEach(h => { baseShare[h.id] /= sumBase; });
+
+  // 實際份額
+  const betShare = {};
+  horses.forEach(h => { betShare[h.id] = winVol[h.id] / totalWin; });
+
+  // α：下注量越高，越貼近實際分布（K=300 時 α≈0.5）
+  const K = 300;
+  const alpha = totalWin / (totalWin + K);
+
+  // 混合份額（兩者都已歸一化，混合結果也歸一化）
+  const blendedShare = {};
+  horses.forEach(h => {
+    blendedShare[h.id] = Math.max(0.001, (1 - alpha) * baseShare[h.id] + alpha * betShare[h.id]);
+  });
+  const sumBl = Object.values(blendedShare).reduce((s, v) => s + v, 0);
+  horses.forEach(h => { blendedShare[h.id] /= sumBl; });
+
+  // 動態獨贏賠率 = 預設賠率 × (基準份額 / 混合份額)
+  // → α=0 時 factor=1，dynWin = h.odds（等於預設）
+  // → 下注偏多時 factor<1（賠率降），下注偏少時 factor>1（賠率升）
+  const dynWin = {};
+  horses.forEach((h, i) => {
+    const minFloor = Math.round((1.1 + i * 0.1) * 10) / 10;
+    const factor = baseShare[h.id] / blendedShare[h.id];
+    dynWin[h.id] = Math.max(minFloor, Math.round(h.odds * factor * 10) / 10);
+  });
+
+  // 動態連贏賠率 = (dynWin[i] + dynWin[j]) / 2
+  const dynQuin = {};
+  horses.forEach((h1, i) => {
+    horses.forEach((h2, j) => {
+      if (j <= i) return;
+      const minQ = Math.round((1.1 + i * 0.1 + 1.1 + j * 0.1) * 10) / 10;
+      const raw = Math.round((dynWin[h1.id] + dynWin[h2.id]) / 2 * 10) / 10;
+      dynQuin[quinellaKey(h1.id, h2.id)] = Math.max(minQ, raw);
+    });
+  });
+
+  return { win: dynWin, quinella: dynQuin };
+}
+
+function getQuinellaOdds(race, h1Id, h2Id) {
+  const key = quinellaKey(h1Id, h2Id);
+  if(race.quinellaOdds && race.quinellaOdds[key] != null) return race.quinellaOdds[key];
+  // 相容舊版 directional key
+  if(race.quinellaOdds && race.quinellaOdds[h1Id+'_'+h2Id] != null) return race.quinellaOdds[h1Id+'_'+h2Id];
+  const horse1 = race.horses.find(h=>h.id===h1Id);
+  const horse2 = race.horses.find(h=>h.id===h2Id);
+  if(!horse1||!horse2) return 1;
+  return Math.round((horse1.odds + horse2.odds) / 2 * 10) / 10;
+}
+
+function updatePayout() {
+  if(!state.pendingBet) return;
+  const race = state.races.find(r=>r.id===state.pendingBet.raceId);
+  const amount = parseInt(document.getElementById('modal-amount').value)||0;
+
+  if(state.currentBetType === 'quinella') {
+    const h1Id = document.getElementById('modal-horse1').value;
+    const h2Id = document.getElementById('modal-horse2').value;
+    if(!h1Id||!h2Id||h1Id===h2Id) {
+      document.getElementById('modal-quinella-odds').textContent = '—';
+      document.getElementById('modal-payout').textContent = '—';
+      return;
+    }
+    const odds = getQuinellaOdds(race, h1Id, h2Id);
+    document.getElementById('modal-quinella-odds').textContent = odds + 'x';
+    document.getElementById('modal-payout').textContent = amount>0 ? Math.round(amount*odds)+' pts' : '—';
+  } else {
+    const horse = race.horses.find(h=>h.id===state.pendingBet.horseId);
+    document.getElementById('modal-win-odds').textContent = horse.odds + 'x';
+    document.getElementById('modal-payout').textContent = amount>0 ? Math.round(amount*horse.odds)+' pts' : '—';
+  }
+}
+
+function confirmBet() {
+  const user = getUser();
+  const amount = parseInt(document.getElementById('modal-amount').value)||0;
+  if(!amount||amount<1) { toast('請輸入下注點數'); return; }
+  const {raceId} = state.pendingBet;
+  if(!state.pendingBets) state.pendingBets = [];
+
+  if(state.currentBetType === 'quinella') {
+    // ── 二重彩 ──
+    const horseId1 = document.getElementById('modal-horse1').value;
+    const horseId2 = document.getElementById('modal-horse2').value;
+    if(!horseId1||!horseId2) { toast('請選擇兩匹馬'); return; }
+    if(horseId1===horseId2) { toast('兩匹馬不能相同！'); return; }
+    const race = state.races.find(r=>r.id===raceId);
+    const odds = getQuinellaOdds(race, horseId1, horseId2);
+    const pairKey = quinellaKey(horseId1, horseId2);
+    // 計算扣除「同一組合」的其他已掛注後的可用點數
+    const otherTotal = state.pendingBets.filter(b=>!(b.raceId===raceId&&b.type==='quinella'&&quinellaKey(b.horseId,b.horseId2)===pairKey)).reduce((s,b)=>s+b.amount,0);
+    if(amount > user.points - otherTotal) { toast('點數不足！'); return; }
+    // 同一組合只保留一筆（修改），不同組合可同時存在（新增）
+    const existingIdx = state.pendingBets.findIndex(b=>b.raceId===raceId&&b.type==='quinella'&&quinellaKey(b.horseId,b.horseId2)===pairKey);
+    const newBet = {id:'pb'+Date.now(),userId:state.currentUser,raceId,horseId:horseId1,horseId2,type:'quinella',amount,odds};
+    if(existingIdx>=0) { state.pendingBets[existingIdx]=newBet; toast('📝 連贏已修改，記得按送出！'); }
+    else { state.pendingBets.push(newBet); toast('📝 連贏已加入待送出清單'); }
+
+  } else {
+    // ── 獨贏 ──
+    const {horseId} = state.pendingBet;
+    const otherTotal = state.pendingBets.filter(b=>!(b.raceId===raceId&&b.horseId===horseId&&b.type==='win')).reduce((s,b)=>s+b.amount,0);
+    if(amount > user.points - otherTotal) { toast('點數不足！'); return; }
+    const race = state.races.find(r=>r.id===raceId);
+    const horse = race.horses.find(h=>h.id===horseId);
+    const existingIdx = state.pendingBets.findIndex(b=>b.raceId===raceId&&b.horseId===horseId&&b.type==='win');
+    const newBet = {id:'pb'+Date.now(),userId:state.currentUser,raceId,horseId,type:'win',amount,odds:horse.odds};
+    if(existingIdx>=0) { state.pendingBets[existingIdx]=newBet; toast('📝 下注已修改，記得按送出！'); }
+    else { state.pendingBets.push(newBet); toast('📝 已加入待送出清單'); }
+  }
+
+  savePending();
+  closeModal();
+  renderRaces();
+}
+
+// ── 管理員「賠率表」頁：顯示獨贏 + 連贏的賠率及各格總注額 ──
+function renderAdminOddsTable() {
+  const activeRace = state.races.find(r => r.id === state.activeRaceId)
+                  || state.races.find(r => r.status !== 'finished')
+                  || state.races[state.races.length - 1];
+
+  if (!activeRace) {
+    return '<div class="empty-state" style="margin-top:40px;">📋 尚未建立任何賽事</div>';
+  }
+
+  const raceBets = state.bets.filter(b => b.raceId === activeRace.id);
+
+  // ── 獨贏各格總注額 ──
+  const winPool = {};
+  raceBets.filter(b => b.type === 'win').forEach(b => {
+    winPool[b.horseId] = (winPool[b.horseId] || 0) + b.amount;
+  });
+
+  const winCells = activeRace.horses.map((h, i) => {
+    const total = winPool[h.id] || 0;
+    return `<div class="win-cell" style="flex:1;min-width:0;background:var(--color-background-secondary);border-radius:10px;padding:8px 4px;text-align:center;cursor:default;">
+      <div class="wc-num" style="font-size:calc(11px * var(--font-multiplier));color:var(--color-text-secondary);font-weight:600;margin-bottom:2px;">${idxToLetter(i)}</div>
+      <div style="font-size:calc(9px * var(--font-multiplier));color:var(--color-text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">${h.name}</div>
+      <div class="wc-odds" style="font-size:calc(14px * var(--font-multiplier));font-weight:700;color:var(--color-text-primary);">${h.odds}x</div>
+      ${total > 0 ? `<div style="font-size:calc(10px * var(--font-multiplier));color:#2563eb;font-weight:600;margin-top:2px;">💰${total}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // ── 連贏矩陣 ──
+  const quinPool = {};
+  raceBets.filter(b => b.type === 'quinella').forEach(b => {
+    const k = quinellaKey(b.horseId, b.horseId2||'');
+    quinPool[k] = (quinPool[k] || 0) + b.amount;
+  });
+
+  const nHorses = activeRace.horses.length; // 通常8
+  const labelPct = 14;
+  const cellPct  = ((100 - labelPct) / (nHorses - 1)).toFixed(2);
+  const colgroup = `<colgroup>
+    <col style="width:${labelPct}%;">
+    ${activeRace.horses.slice(1).map(()=>`<col style="width:${cellPct}%;">`).join('')}
+  </colgroup>`;
+
+  const colH = `<th style="min-width:0;"></th>` +
+    activeRace.horses.slice(1).map((h, idx) => {
+      const j = idx + 1;
+      return `<th style="font-size:calc(16px * var(--font-multiplier));text-align:center;padding:3px 2px;color:#111827;font-weight:800;">${idxToLetter(j)}<br><span style="font-size:calc(12px * var(--font-multiplier));font-weight:700;color:#111827;">${h.name.slice(0,4)}</span></th>`;
+    }).join('');
+
+  const rows = activeRace.horses.slice(0, -1).map((h1, i) => {
+    const cells = activeRace.horses.slice(1).map((h2, idx) => {
+      const j = idx + 1;
+      // 空格子：完全透明，不顯示任何內容
+      if (j <= i) return `<td style="padding:2px;height:calc(52px * var(--font-multiplier));"></td>`;
+      const key = quinellaKey(h1.id, h2.id);
+      const qOdds = activeRace.quinellaOdds?.[key];
+      const total = quinPool[key] || 0;
+      return `<td style="padding:2px;text-align:center;vertical-align:middle;height:calc(52px * var(--font-multiplier));">
+        <div style="background:var(--color-background-secondary);border-radius:8px;padding:5px 2px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(48px * var(--font-multiplier));">
+          <div style="font-size:calc(12px * var(--font-multiplier));font-weight:700;color:var(--color-text-primary);">${qOdds ? qOdds+'x' : '—'}</div>
+          ${total > 0 ? `<div style="font-size:calc(9px * var(--font-multiplier));color:#2563eb;font-weight:600;">💰${total}</div>` : ''}
+        </div>
+      </td>`;
+    }).join('');
+    return `<tr>
+      <td style="font-size:calc(16px * var(--font-multiplier));padding:2px 6px;white-space:nowrap;color:#111827;font-weight:800;vertical-align:middle;">${idxToLetter(i)}.${h1.name.slice(0,4)}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  const totalWin = raceBets.filter(b=>b.type==='win').reduce((s,b)=>s+b.amount,0);
+  const totalQ   = raceBets.filter(b=>b.type==='quinella').reduce((s,b)=>s+b.amount,0);
+
+  return `<div class="page-content" style="padding:0 16px 24px;">
+    <div class="section-title" style="margin-top:20px;">🏆 獨贏賠率表 &nbsp;<span style="font-size:calc(11px * var(--font-multiplier));font-weight:400;color:#6b7280;">總注額 ${totalWin}</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">${winCells}</div>
+
+    <div class="section-title">🔗 連贏賠率表 &nbsp;<span style="font-size:calc(11px * var(--font-multiplier));font-weight:400;color:#6b7280;">總注額 ${totalQ}</span></div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+        ${colgroup}
+        <thead><tr>${colH}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function renderSlip() {
+  const user = getUser();
+  const el = document.getElementById('page-slip');
+
+  if (user.role === 'admin') {
+    el.innerHTML = renderAdminOddsTable();
+    return;
+  }
+
+  const myPending = (state.pendingBets||[]).filter(b=>b.userId===state.currentUser);
+  const myBets = state.bets.filter(b=>b.userId===state.currentUser);
+  const locked = myBets.filter(b=>!b.settled);
+  const settled = myBets.filter(b=>b.settled).reverse();
+
+  if(!myPending.length && !myBets.length) {
+    el.innerHTML='<div class="empty-state">📄 尚無投注紀錄<br><span style="font-size:calc(13px * var(--font-multiplier)); margin-top:8px; display:inline-block;">前往賽事頁面下注</span></div>';
+    return;
+  }
+
+  const pendingTotal = myPending.reduce((s,b)=>s+b.amount,0);
+  const pendingSlipsHtml = myPending.map(b=>{
+    const race = state.races.find(r=>r.id===b.raceId)||{name:'未知賽事'};
+    const horse1 = (race.horses||[]).find(h=>h.id===b.horseId)||{name:'未知馬匹'};
+    const isQuinella = b.type==='quinella';
+    const horse2 = isQuinella ? ((race.horses||[]).find(h=>h.id===b.horseId2)||{name:'未知'}) : null;
+    const typeLabel = isQuinella ? '連贏 (Quinella)' : '獨贏';
+    const horseLine = isQuinella
+      ? `<span style="color:#7c3aed;">${horse1.name}</span> <span style="font-size:calc(13px * var(--font-multiplier));color:#6b7280;">＋</span> <span style="color:#7c3aed;">${horse2.name}</span> <span style="font-size:calc(11px * var(--font-multiplier));color:#9ca3af;">（任意順序前兩名）</span>`
+      : horse1.name;
+    const borderColor = isQuinella ? '#7c3aed' : '#d97706';
+    const bg         = isQuinella ? '#f5f3ff' : '#fffbeb';
+    const tagColor   = isQuinella ? '#7c3aed' : '#d97706';
+    return `<div class="slip" style="border:2px solid ${borderColor};background:${bg};">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:calc(12px * var(--font-multiplier));background:${tagColor};color:#fff;padding:2px 8px;border-radius:10px;font-weight:600;">待送出 · ${typeLabel}</span>
+        <button onclick="removePendingBet('${b.id}')" style="background:none;border:none;color:#dc2626;font-size:calc(18px * var(--font-multiplier));cursor:pointer;line-height:1;">×</button>
+      </div>
+      <div class="slip-race">${race.name}</div>
+      <div class="slip-header">
+        <div class="slip-horse" style="font-size:calc(15px * var(--font-multiplier));">${horseLine}</div>
+        <div style="font-size:calc(16px * var(--font-multiplier));font-weight:600;color:${tagColor}">${b.amount} pts</div>
+      </div>
+      <div class="slip-type">賠率 ${b.odds||'—'}x · 預計最高回報：<b>${Math.round(b.amount*(b.odds||0))} pts</b></div>
+    </div>`;
+  }).join('');
+
+  const pendingSection = myPending.length ? `
+    <div style="background:#fffbeb;border:2px solid #d97706;border-radius:16px;padding:12px 16px;margin:16px 0 8px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:calc(14px * var(--font-multiplier));font-weight:700;color:#92400e;">📝 待送出 ${myPending.length} 注，共 ${pendingTotal} pts</div>
+        <div style="font-size:calc(12px * var(--font-multiplier));color:#d97706;margin-top:2px;">按「送出」鎖定，按 × 可移除</div>
+      </div>
+      <button onclick="submitAllBets()" style="background:#d97706;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:calc(14px * var(--font-multiplier));font-weight:700;cursor:pointer;">送出 →</button>
+    </div>
+    ${pendingSlipsHtml}
+  ` : '';
+
+  el.innerHTML = `
+    ${pendingSection}
+    ${locked.length?`<p class="section-title">🕒 待結算 (${locked.length})</p>${locked.map(betSlip).join('')}`:''}
+    ${settled.length?`<p class="section-title">✅ 已結算</p>${settled.map(betSlip).join('')}`:''}
+  `;
+}
+
+function betSlip(bet) {
+  const race = state.races.find(r=>r.id===bet.raceId)||{name:'未知賽事'};
+  const horse1 = (race.horses||[]).find(h=>h.id===bet.horseId)||{name:'未知馬匹'};
+  const isQuinella = bet.type==='quinella';
+  const horse2 = isQuinella ? ((race.horses||[]).find(h=>h.id===bet.horseId2)||{name:'未知'}) : null;
+  const typeLabel = isQuinella ? '連贏 (Quinella)' : '獨贏';
+  const horseLine = isQuinella
+    ? `<span>${horse1.name}</span><span style="color:#6b7280;font-size:calc(13px * var(--font-multiplier));font-weight:400;"> ＋ </span><span>${horse2.name}</span><span style="color:#9ca3af;font-size:calc(11px * var(--font-multiplier));"> 任意順序</span>`
+    : horse1.name;
+  const canCancel = !bet.settled && race.status === 'open';
+  let resultHtml = '';
+  if(bet.settled) {
+    if(bet.won) resultHtml=`<div style="font-size:calc(14px * var(--font-multiplier)); font-weight:600; color:var(--color-text-success); margin-top:8px; padding-top:8px; border-top:1px dashed var(--color-border-secondary);">🎉 獲利 +${bet.payout} pts</div>`;
+    else resultHtml=`<div style="font-size:calc(14px * var(--font-multiplier)); font-weight:500; color:var(--color-text-danger); margin-top:8px; padding-top:8px; border-top:1px dashed var(--color-border-secondary);">落注 -${bet.amount} pts</div>`;
+  }
+  return `<div class="slip">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div class="slip-race">${race.name}</div>
+      ${canCancel?`<button onclick="cancelBet('${bet.id}')" style="background:none;border:1px solid #fca5a5;color:#dc2626;border-radius:8px;padding:3px 10px;font-size:calc(12px * var(--font-multiplier));cursor:pointer;flex-shrink:0;margin-left:8px;">取消下注</button>`:''}
+    </div>
+    <div class="slip-header">
+      <div class="slip-horse" style="${isQuinella?'font-size:calc(15px * var(--font-multiplier));':''}">${horseLine}</div>
+      <div style="font-size:calc(16px * var(--font-multiplier));font-weight:600;color:var(--color-text-primary)">${bet.amount} pts</div>
+    </div>
+    <div class="slip-type">${typeLabel} · 賠率 ${bet.odds||'—'}x</div>
+    ${resultHtml}
+    ${!bet.settled?`<div style="font-size:calc(13px * var(--font-multiplier)); font-weight:500; color:var(--primary); margin-top:8px;">⏳ 等待開獎...</div>`:''}
+  </div>`;
+}
+
+function renderBoard() {
+  const el = document.getElementById('page-board');
+  const ranked = state.users.filter(u=>u.role!=='admin').sort((a,b)=>b.points-a.points);
+  el.innerHTML = `
+    <p class="section-title">📊 系統統計</p>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">總建立場次</div><div class="stat-val">${state.races.length}</div></div>
+      <div class="stat-card" style="background:var(--color-background-success)"><div class="stat-label" style="color:var(--color-text-success)">已完結場次</div><div class="stat-val" style="color:var(--color-text-success)">${state.races.filter(r=>r.status==='finished').length}</div></div>
+    </div>
+    <p class="section-title">🏆 玩家積分排行</p>
+    <div style="background:var(--color-background-primary); border-radius:var(--border-radius-md); padding: 0 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); border: 1px solid var(--color-border-secondary);">
+      ${ranked.map((u,i)=>{
+        const diff = u.points - 1000;
+        const diffClass = diff>0?'positive':diff<0?'negative':'';
+        return `<div class="leaderboard-row" style="${i===ranked.length-1?'border:none;':''}">
+          <div class="lb-rank">${i+1}</div>
+          <div class="lb-avatar" style="background:${COLORS[u.color%COLORS.length]};color:${TEXT_COLORS[u.color%TEXT_COLORS.length]}">${u.name[0]}</div>
+          <div class="lb-name">${u.name}</div>
+          <div class="lb-pts ${diffClass}">${u.points} pts</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderHistory() {
+  const user = getUser();
+  const el = document.getElementById('page-history');
+  
+  if (user.role === 'admin') {
+    el.innerHTML = '<div class="empty-state">管理員不參與遊玩<br><span style="font-size:calc(13px * var(--font-multiplier)); margin-top:8px; display:inline-block;">無法檢視個人紀錄</span></div>';
+    return;
+  }
+
+  const myBets = state.bets.filter(b=>b.userId===state.currentUser&&b.settled).reverse();
+  if(!myBets.length) { el.innerHTML='<div class="empty-state">📂 暫無結算紀錄</div>'; return; }
+  el.innerHTML = `<p class="section-title">📜 歷史結算紀錄</p>
+  <div style="background:var(--color-background-primary); border-radius:var(--border-radius-md); padding: 0 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); border: 1px solid var(--color-border-secondary);">
+    ${myBets.map((bet, i)=>{
+      const race = state.races.find(r=>r.id===bet.raceId)||{name:'未知'};
+      const horse = (race.horses||[]).find(h=>h.id===bet.horseId)||{name:'未知'};
+      const typeLabel = bet.type==='win'?'獨贏':'位置';
+      const change = bet.won ? bet.payout : -bet.amount;
+      return `<div class="history-row" style="${i===myBets.length-1?'border:none;':''}">
+        <div class="history-meta">${race.name} · ${typeLabel}</div>
+        <div class="history-main">
+          <div class="history-desc">${horse.name} · <span style="color:var(--color-text-secondary); font-size:calc(13px * var(--font-multiplier)); font-weight:normal;">下注 ${bet.amount}</span></div>
+          <div class="history-amount" style="color:var(--color-text-${change>=0?'success':'danger'})">${change>=0?'+':''}${change}</div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderAdmin() {
+  const el = document.getElementById('page-admin');
+  const activeRace = state.races.find(r => r.id === state.activeRaceId);
+
+  // ── 玩家下注概況 ──
+  let playerBetsOverviewHtml = '<div class="empty-state" style="padding:20px 0;">目前無人下注，或未指定賽事</div>';
+  if (activeRace) {
+    const activeBets = state.bets.filter(b => b.raceId === activeRace.id);
+    if (activeBets.length > 0) {
+      playerBetsOverviewHtml = activeRace.horses.map(h => {
+        const hBets = activeBets.filter(b => b.horseId === h.id);
+        if (!hBets.length) return '';
+        let totalH = 0;
+        const details = hBets.map(b => {
+          totalH += b.amount;
+          const u = state.users.find(u2 => u2.id === b.userId) || {name:'未知'};
+          return `<div style="display:flex;justify-content:space-between;font-size:calc(13px * var(--font-multiplier));color:var(--color-text-secondary);padding:4px 0;">
+            <span>👤 ${u.name} (${b.type==='win'?'獨贏':'連贏'})</span>
+            <span style="font-weight:500;color:var(--color-text-primary);">${b.amount} pts</span>
+          </div>`;
+        }).join('');
+        return `<div style="background:var(--color-background-secondary);border-radius:var(--border-radius-sm);padding:12px;margin-bottom:10px;">
+          <div style="font-weight:600;font-size:calc(14px * var(--font-multiplier));margin-bottom:8px;display:flex;justify-content:space-between;">
+            <span>🐎 ${h.name}</span><span style="color:var(--primary);">共押 ${totalH} pts</span>
+          </div>
+          <div style="border-top:1px dashed #d1d5db;margin-bottom:6px;"></div>
+          ${details}
+        </div>`;
+      }).join('');
+      if (!playerBetsOverviewHtml.trim()) playerBetsOverviewHtml = '<div class="empty-state" style="padding:20px 0;">目前無人下注</div>';
+    }
+  }
+
+  // ── 全域二重彩賠率（用索引 key）──
+  const labelTdW = 'width:16%;min-width:52px;';
+  const quinColHeaders = DEFAULT_HORSES.slice(1).map((h,idx) => {
+    const j = idx+1;
+    return `<th style="font-size:calc(11px * var(--font-multiplier));padding:4px 3px;text-align:center;font-weight:600;color:var(--color-text-secondary);">${idxToLetter(j)}<br><span style="font-size:calc(9px * var(--font-multiplier));font-weight:400;">${h.name.slice(0,4)}</span></th>`;
+  }).join('');
+  const quinRows = DEFAULT_HORSES.slice(0,-1).map((h1,i) => {
+    const cells = DEFAULT_HORSES.slice(1).map((h2,idx) => {
+      const j = idx+1;
+      if (j<=i) return `<td style="background:#f3f4f6;text-align:center;padding:3px;color:#d1d5db;font-size:calc(12px * var(--font-multiplier));">—</td>`;
+      const key = i+'_'+j;
+      const cur = _DEFAULT_QUINELLA[key] != null ? _DEFAULT_QUINELLA[key] : '';
+      return `<td style="padding:2px;"><input type="number" id="dqo_${key}" value="${cur}" min="1" step="0.1" style="width:100%;padding:5px 2px;font-size:calc(11px * var(--font-multiplier));text-align:center;border:1px solid var(--color-border-secondary);border-radius:4px;box-sizing:border-box;"></td>`;
+    }).join('');
+    return `<tr><td style="${labelTdW}font-size:calc(11px * var(--font-multiplier));padding:4px;color:var(--color-text-secondary);font-weight:600;text-align:center;vertical-align:middle;">${idxToLetter(i)}<br><span style="font-size:calc(9px * var(--font-multiplier));font-weight:400;">${h1.name.slice(0,4)}</span></td>${cells}</tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:12px 0 4px;">
+      <button onclick="openWheel()" style="padding:8px 20px;background:#f5f3ff;color:#7c3aed;border:1px solid #c4b5fd;border-radius:var(--border-radius-sm);font-size:calc(13px * var(--font-multiplier));font-weight:600;cursor:pointer;">🎡 轉盤</button>
+      <button onclick="logout()" style="padding:8px 20px;background:var(--color-background-secondary);color:var(--color-text-secondary);border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-sm);font-size:calc(13px * var(--font-multiplier));font-weight:600;cursor:pointer;">🚪 登出</button>
+    </div>
+
+    <!-- 系統設定 -->
+    <div class="admin-card" style="background:#f0fdf4;border-color:#bbf7d0;margin-top:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div>
+          <div style="font-size:calc(13px * var(--font-multiplier));color:#166534;font-weight:600;">🔐 密碼保護 &nbsp;${state.requirePassword!==false?'🔒 開啟':'🔓 關閉（測試模式）'}</div>
+          <div style="font-size:calc(11px * var(--font-multiplier));color:#15803d;margin-top:2px;opacity:0.85;">關閉時登入/登出皆不需密碼。</div>
+        </div>
+        <button onclick="toggleRequirePassword()" style="padding:8px 16px;background:${state.requirePassword!==false?'#dc2626':'#16a34a'};color:#fff;border:none;border-radius:8px;font-size:calc(13px * var(--font-multiplier));font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;">
+          ${state.requirePassword!==false?'關閉密碼':'開啟密碼'}
+        </button>
+      </div>
+    </div>
+
+    <div class="admin-card" style="background:#fefce8;border-color:#fde68a;margin-top:8px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:calc(13px * var(--font-multiplier));font-weight:600;color:#a16207;white-space:nowrap;">🔠 文字大小</span>
+        <input type="range" id="ui-scale-slider" min="1" max="3.5" step="0.1" value="${getFontScale()}" oninput="setFontScale(this.value)" style="flex:1;accent-color:#a16207;">
+        <span id="ui-scale-label" style="font-size:calc(15px * var(--font-multiplier));font-weight:700;color:#a16207;min-width:48px;text-align:right;">${getFontScale().toFixed(1)}x</span>
+        <button onclick="setFontScale(2.5)" style="padding:6px 12px;border:1px solid #fde68a;border-radius:6px;background:#fff;font-size:calc(12px * var(--font-multiplier));font-weight:600;color:#a16207;cursor:pointer;">重設</button>
+      </div>
+    </div>
+
+    <!-- 👁️ 可見賽事 -->
+    <div class="admin-card" style="background:var(--color-background-info);border-color:#bfdbfe;margin-top:8px;">
+      <h3 style="font-size:calc(15px * var(--font-multiplier));margin-bottom:10px;color:var(--color-text-info);">👁️ 設定玩家可見賽事</h3>
+      <div class="result-select" style="margin-bottom:0;">
+        <label style="width:auto;color:var(--color-text-info);">顯示</label>
+        <select onchange="setActiveRace(this.value)" style="border-color:#bfdbfe;">
+          <option value="">-- 隱藏所有賽事 --</option>
+          ${state.races.map(r=>`<option value="${r.id}" ${state.activeRaceId===r.id?'selected':''}>${r.name} (${r.status==='open'?'開放':r.status==='closed'?'截止':'完結'})</option>`).join('')}
+        </select>
+      </div>
+      <p style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-info);margin-top:8px;opacity:0.8;">玩家只會看到你在此處選擇的那一場賽事。</p>
+    </div>
+
+    <!-- 📊 玩家下注概況（可收放）-->
+    <div class="admin-card" style="margin-top:8px;">
+      ${adminSectionHeader('bets','📊','玩家下注概況（目前賽事）')}
+      ${adminSectionBody('bets', playerBetsOverviewHtml)}
+    </div>
+
+    <!-- 🐎 馬匹名稱及賠率（可收放，全域設定）-->
+    <div class="admin-card" style="margin-top:8px;">
+      ${adminSectionHeader('horses','🐎','馬匹名稱及賠率（全域設定）','color:#92400e;')}
+      ${adminSectionBody('horses', `
+        <p style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:10px;line-height:1.5;">
+          修改後自動儲存為預設值，下次建立賽事時會自動套用。<b>不會影響已建立的賽事。</b>
+        </p>
+        <div id="horse-inputs">
+          ${DEFAULT_HORSES.map((h,i)=>`<div class="horse-input-row">
+            <input type="text" value="${h.name}" maxlength="10" oninput="updateDefaultHorseName(${i},this.value)" style="flex:2;min-width:0;">
+            <input type="number" class="odds-in" placeholder="賠率" value="${h.odds}" step="0.1" min="1.1" oninput="updateDefaultHorseOdds(${i},this.value);updateDefaultQuinellaFromHorse()" style="flex:1;min-width:0;">
+          </div>`).join('')}
+        </div>
+      `)}
+    </div>
+
+    <!-- 🔗 二重彩賠率設定（可收放，全域設定）-->
+    <div class="admin-card" style="margin-top:8px;">
+      ${adminSectionHeader('quinella','🔗','二重彩賠率設定（全域設定）','color:#5b21b6;')}
+      ${adminSectionBody('quinella', `
+        <p style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:10px;line-height:1.5;">
+          上三角格子為每組<b>連贏</b>組合賠率，修改後點「儲存」即生效。下次建立賽事時自動套用，<b>不影響已建立的賽事。</b>
+        </p>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:14px;">
+          <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+            <thead><tr><th style="${labelTdW}padding:4px;"></th>${quinColHeaders}</tr></thead>
+            <tbody>${quinRows}</tbody>
+          </table>
+        </div>
+        <button class="btn-primary" style="background:#7c3aed;" onclick="saveDefaultQuinellaFromUI()">儲存二重彩賠率</button>
+      `)}
+    </div>
+
+    <!-- 玩家管理 -->
+    <p class="section-title">👥 玩家管理</p>
+    <div class="admin-card">
+      <div style="margin-bottom:12px;">
+        ${state.users.filter(u=>u.role!=='admin').map(u=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--color-border-tertiary);">
+            <div style="width:34px;height:34px;border-radius:50%;background:${COLORS[u.color||0]};display:flex;align-items:center;justify-content:center;font-size:calc(14px * var(--font-multiplier));font-weight:700;color:#fff;flex-shrink:0;">${u.name.slice(0,1)}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:calc(14px * var(--font-multiplier));font-weight:600;color:var(--color-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name}</div>
+              <div style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);">${u.points} pts</div>
+            </div>
+            <button onclick="adminResetPoints('${u.id}')" style="padding:6px 10px;border:1px solid var(--color-border-secondary);border-radius:6px;font-size:calc(12px * var(--font-multiplier));background:var(--color-background-primary);cursor:pointer;color:var(--color-text-secondary);">重置積分</button>
+            <button onclick="adminDeleteUser('${u.id}','${u.name}')" style="padding:6px 10px;border:1px solid #fca5a5;border-radius:6px;font-size:calc(12px * var(--font-multiplier));background:#fff5f5;cursor:pointer;color:#dc2626;">刪除</button>
+          </div>`).join('')}
+        ${state.users.filter(u=>u.role!=='admin').length===0?`<div style="text-align:center;padding:16px 0;color:var(--color-text-tertiary);font-size:calc(14px * var(--font-multiplier));">尚無玩家</div>`:''}
+      </div>
+      <div style="display:flex;gap:10px;margin-top:4px;">
+        <input type="text" id="admin-new-player-name" placeholder="新增玩家名稱..." maxlength="12" style="flex:1;">
+        <input type="number" id="admin-new-player-pts" placeholder="初始積分" value="${getDefaultPoints()}" min="1" style="width:110px;flex:none;" oninput="saveDefaultPoints(this.value)">
+        <button onclick="adminAddUser()" style="padding:10px 16px;background:var(--primary);color:#fff;border:none;border-radius:var(--border-radius-sm);font-size:calc(14px * var(--font-multiplier));font-weight:600;cursor:pointer;white-space:nowrap;">新增</button>
+      </div>
+    </div>
+
+    <!-- ➕ 建立多場賽事 -->
+    <p class="section-title">➕ 建立新賽事</p>
+    <div class="admin-card">
+      <div class="form-row">
+        <label>賽事名稱前綴</label>
+        <input type="text" id="new-race-prefix" placeholder="例：挑戰盃 賽馬比賽"
+          value="${getDefaultRacePrefix()}"
+          oninput="saveDefaultRacePrefix(this.value)">
+        <div style="font-size:calc(10px * var(--font-multiplier));color:var(--color-text-tertiary);margin-top:4px;">自動儲存為預設值，場次編號自動計算</div>
+      </div>
+      <div class="form-row">
+        <label>發車時間</label>
+        <input type="time" id="new-race-time" value="16:00">
+      </div>
+      <p style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:12px;line-height:1.5;">
+        馬匹名稱及賠率將沿用上方「全域設定」的數值；連贏賠率自動依獨贏賠率計算。
+      </p>
+      <button class="btn-primary" onclick="createRace()">建立賽事</button>
+    </div>
+
+    <!-- 危險區域 -->
+    <p class="section-title" style="color:#dc2626;">🗑️ 危險區域</p>
+    <div class="admin-card" style="border-color:#fca5a5;background:#fff5f5;">
+      <div style="font-size:calc(14px * var(--font-multiplier));font-weight:600;color:#dc2626;margin-bottom:8px;">清除所有賽事記錄</div>
+      <div style="font-size:calc(13px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:14px;line-height:1.5;">
+        刪除所有賽事紀錄與下注資料，並將所有玩家積分重置為 <b>${getDefaultPoints()}</b>。<br>
+        <span style="color:#16a34a;font-weight:600;">✓ 馬匹名稱、賠率及二重彩賠率設定不受影響。</span>
+      </div>
+      <button onclick="clearAllData()" style="background:#dc2626;color:#fff;border:none;border-radius:var(--border-radius-sm);padding:10px 20px;font-size:calc(14px * var(--font-multiplier));font-weight:600;cursor:pointer;width:100%;">⚠️ 清除所有賽事記錄並重置積分</button>
+    </div>
+
+    <!-- 📢 狀態控制與結果公布 -->
+    <p class="section-title">📢 狀態控制與結果公布</p>
+    ${state.races.filter(r=>r.status!=='finished').map(r=>`
+      <div class="admin-card">
+        <h3 style="font-size:calc(16px * var(--font-multiplier));font-weight:600;margin-bottom:16px;border-bottom:1px solid var(--color-border-tertiary);padding-bottom:10px;">${r.name}</h3>
+        <div class="result-select"><label>狀態</label>
+          <select onchange="updateRaceStatus('${r.id}',this.value)">
+            <option value="open"   ${r.status==='open'  ?'selected':''}>🟢 開放下注</option>
+            <option value="closed" ${r.status==='closed'?'selected':''}>🔴 截止下注</option>
+          </select>
+        </div>
+        <div style="background:var(--color-background-secondary);padding:12px;border-radius:var(--border-radius-sm);margin-top:16px;">
+          <div style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:8px;">請依序填入第1~${r.horses.length}名（從第1名開始選，已選馬匹會從後續選項移除）</div>
+          <div id="result-rows-${r.id}">
+            ${[...Array(r.horses.length)].map((_,pos)=>{
+              const medals = ['🏆','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'];
+              const rainbowRow = pos<2 ? `<label style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:6px;cursor:pointer;font-size:calc(12px * var(--font-multiplier));color:#c71585;font-weight:600;white-space:nowrap;"><input type="checkbox" id="rainbow${pos+1}-${r.id}" style="width:auto;accent-color:#c71585;"> 🌈</label>` : '';
+              return `<div class="result-select" style="align-items:center;margin-bottom:6px;">
+                <label style="flex-shrink:0;width:28px;text-align:center;">${medals[pos]||pos+1}</label>
+                <select id="res${pos+1}-${r.id}" style="flex:1;" onchange="syncResultDropdowns('${r.id}',${r.horses.length})">
+                  <option value="">選擇馬匹...</option>
+                  ${r.horses.map(h=>`<option value="${h.id}">${h.name}</option>`).join('')}
+                </select>
+                ${rainbowRow}
+              </div>`;
+            }).join('')}
+          </div>
+          <div style="font-size:calc(11px * var(--font-multiplier));color:#c71585;margin-bottom:10px;line-height:1.6;">🌈 彩虹馬加成：獨贏×2　連贏任一彩虹×2　兩匹都彩虹×4</div>
+          <button class="btn-primary" style="padding:10px;font-size:calc(14px * var(--font-multiplier));background:#16a34a;" onclick="settleRace('${r.id}')">公布結果 & 結算彩金</button>
+        </div>
+      </div>
+    `).join('')}
+
+    ${state.races.filter(r=>r.status==='finished').length ? `
+    <p class="section-title" style="margin-top:20px;">🏁 歷史結果</p>
+    ${state.races.filter(r=>r.status==='finished').map((r,ri,arr)=>{
+      const isLast = ri === arr.length - 1;
+      const rawPos = r.result?.positions;
+      const posList = Array.isArray(rawPos) ? rawPos : (rawPos&&typeof rawPos==='object'?Object.values(rawPos):[]);
+      const ranked  = posList.filter(id=>id&&typeof id==='string');
+      const posLabels = ['🏆','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'];
+      const placementHtml = ranked.map((hid, pi) => {
+        const h = r.horses.find(x=>x.id===hid);
+        const rb = pi===0&&r.result?.rainbow1?' 🌈':pi===1&&r.result?.rainbow2?' 🌈':'';
+        return h ? `<span style="margin-right:8px;">${posLabels[pi]||pi+1}&nbsp;${h.name}${rb}</span>` : '';
+      }).join('');
+
+      // 下場賠率預覽（只有最後一場才計算）
+      let previewHtml = '';
+      if (isLast) {
+        const next = calcNextRaceOdds(r);
+        const arrows = r.horses.map(h => {
+          const nv = next[h.id];
+          const ov = h.odds;
+          const dir = nv < ov ? `<span style="color:#16a34a;">▼${nv}x</span>` : nv > ov ? `<span style="color:#dc2626;">▲${nv}x</span>` : `<span style="color:#9ca3af;">${nv}x</span>`;
+          return `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="color:#374151;">${h.name}</span>
+            <span>${ov}x &nbsp;→&nbsp; ${dir}</span>
+          </div>`;
+        }).join('');
+        previewHtml = `<div style="margin-top:10px;padding:10px;background:#eff6ff;border-radius:8px;font-size:calc(11px * var(--font-multiplier));">
+          <div style="font-weight:700;color:#2563eb;margin-bottom:6px;">📊 下場賠率預覽（依本場名次調整）</div>
+          ${ranked.length===0?'<div style="color:#9ca3af;">⚠️ 尚未填入任何名次，無法預覽調整</div>':arrows}
+        </div>`;
+      }
+
+      return `
+      <div class="admin-card" style="opacity:${isLast?'1':'0.6'};">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <h3 style="font-size:calc(14px * var(--font-multiplier));font-weight:600;color:var(--color-text-secondary);">${r.name}</h3>
+          ${isLast ? `<button onclick="createNextRace('${r.id}')" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:calc(12px * var(--font-multiplier));font-weight:700;cursor:pointer;white-space:nowrap;">▶ 開啟下一場</button>` : '<span style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-tertiary);">🏁 已完結</span>'}
+        </div>
+        ${r.result ? `<div style="margin-top:8px;font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);line-height:1.8;">
+          ${placementHtml || `🏆 ${r.horses.find(h=>h.id===r.result.first)?.name||'—'}${r.result.rainbow1?' 🌈':''}&nbsp;🥈 ${r.horses.find(h=>h.id===r.result.second)?.name||'—'}${r.result.rainbow2?' 🌈':''}`}
+        </div>` : ''}
+        ${previewHtml}
+      </div>`;
+    }).join('')}` : ''}
+  `;
+}
+
+function setActiveRace(id) {
+  state.activeRaceId = id;
+  save();
+  toast('已更新玩家可見賽事！');
+  renderAdmin(); // 更新玩家概況區域
+}
+
+// 建立單場賽事（共用全域馬匹設定）
+function createRace() {
+  const prefix = (document.getElementById('new-race-prefix').value || '').trim();
+  if (!prefix) { toast('請輸入賽事名稱前綴'); return; }
+  const time = document.getElementById('new-race-time')?.value || '16:00';
+
+  const n = state.races.length + 1;
+  const index = _CN_NUM[n] || String(n);
+  const name = prefix + ' 第' + index + '場';
+  const raceId = 'r' + Date.now();
+
+  // 以目前 DEFAULT_HORSES 快照建立馬匹
+  const raceHorses = DEFAULT_HORSES.map((h, hi) => ({
+    id: 'h' + Date.now() + hi,
+    name: h.name,
+    odds: h.odds
+  }));
+
+  // 連贏賠率：若有手動設定則用設定值，否則自動 (oddsA+oddsB)/2
+  const raceQ = {};
+  raceHorses.forEach((h1, i) => {
+    raceHorses.forEach((h2, j) => {
+      if (j <= i) return;
+      const globalKey = i + '_' + j;
+      raceQ[quinellaKey(h1.id, h2.id)] = _DEFAULT_QUINELLA[globalKey] != null
+        ? _DEFAULT_QUINELLA[globalKey]
+        : Math.round((h1.odds + h2.odds) / 2 * 10) / 10;
+    });
+  });
+
+  state.races.push({ id: raceId, name, time, status: 'open', horses: raceHorses, quinellaOdds: raceQ, result: null });
+  state.activeRaceId = raceId;
+  save();
+  toast('✅ 已建立賽事！');
+  renderAdmin();
+}
+
+// 依前一場名次調整賠率，開啟下一場
+function createNextRace(sourceRaceId) {
+  const source = state.races.find(r => r.id === sourceRaceId);
+  if (!source || source.status !== 'finished') { toast('找不到已完結賽事'); return; }
+
+  const prefix = (document.getElementById('new-race-prefix')?.value || '').trim() || getDefaultRacePrefix();
+  const time = document.getElementById('new-race-time')?.value || '16:00';
+
+  // 依前場名次計算調整後賠率（horseId → newOdds）
+  const adjustedOdds = calcNextRaceOdds(source);
+
+  const n = state.races.length + 1;
+  const index = _CN_NUM[n] || String(n);
+  const name = prefix + ' 第' + index + '場';
+  const raceId = 'r' + Date.now();
+
+  // 建立新馬匹（同名，新 ID，已調整賠率）
+  const raceHorses = source.horses.map((h, idx) => ({
+    id: 'h' + Date.now() + idx,
+    name: h.name,
+    odds: adjustedOdds[h.id] ?? h.odds
+  }));
+
+  // 連贏賠率自動計算：(oddsA + oddsB) / 2
+  const raceQ = {};
+  raceHorses.forEach((h1, i) => {
+    raceHorses.forEach((h2, j) => {
+      if (j <= i) return;
+      raceQ[quinellaKey(h1.id, h2.id)] = Math.round((h1.odds + h2.odds) / 2 * 10) / 10;
+    });
+  });
+
+  // ── 同步回管理介面預設值（讓下次建立賽事也用新賠率）──
+  source.horses.forEach((h, idx) => {
+    if (DEFAULT_HORSES[idx]) {
+      DEFAULT_HORSES[idx].odds = adjustedOdds[h.id] ?? h.odds;
+    }
+  });
+  // 同步更新全域連贏預設值
+  raceHorses.forEach((h1, i) => {
+    raceHorses.forEach((h2, j) => {
+      if (j <= i) return;
+      _DEFAULT_QUINELLA[i + '_' + j] = Math.round((h1.odds + h2.odds) / 2 * 10) / 10;
+    });
+  });
+  saveDefaultHorses();
+  saveDefaultQuinella();
+
+  state.races.push({ id: raceId, name, time, status: 'open', horses: raceHorses, quinellaOdds: raceQ, result: null });
+  state.activeRaceId = raceId;
+  save();
+  toast('✅ 下一場已建立，賠率已依前場名次調整！');
+  renderAdmin();
+}
+
+// 從 UI 儲存全域二重彩賠率
+function saveDefaultQuinellaFromUI() {
+  let hasError = false;
+  DEFAULT_HORSES.forEach((h1, i) => {
+    DEFAULT_HORSES.forEach((h2, j) => {
+      if (j <= i) return;
+      const key = i + '_' + j;
+      const inp = document.getElementById('dqo_' + key);
+      if (inp) {
+        const val = parseFloat(inp.value);
+        if (isNaN(val) || val < 1) { hasError = true; return; }
+        _DEFAULT_QUINELLA[key] = Math.round(val * 10) / 10;
+      }
+    });
+  });
+  if (hasError) { toast('⚠️ 部分賠率無效（需 ≥ 1），請檢查後再儲存'); return; }
+  saveDefaultQuinella();
+  toast('✅ 二重彩賠率已儲存！下次建立賽事時自動套用。');
+}
+
+// 馬匹賠率修改時同步更新全域二重彩賠率預設值
+function updateDefaultQuinellaFromHorse() {
+  DEFAULT_HORSES.forEach((h1, i) => {
+    DEFAULT_HORSES.forEach((h2, j) => {
+      if (j <= i) return;
+      const key = i + '_' + j;
+      _DEFAULT_QUINELLA[key] = Math.round((h1.odds + h2.odds) / 2 * 10) / 10;
+    });
+  });
+  saveDefaultQuinella();
+}
+
+function updateRaceStatus(raceId, status) {
+  const race = state.races.find(r=>r.id===raceId);
+  if(race) { race.status=status; save(); toast('狀態已更新'); }
+}
+
+// 級聯下拉：已選馬匹從後續名次移除
+function syncResultDropdowns(raceId, n) {
+  const selected = [];
+  for (let i = 1; i <= n; i++) {
+    const sel = document.getElementById('res'+i+'-'+raceId);
+    if (sel) selected.push({ pos: i, val: sel.value });
+  }
+  for (let i = 1; i <= n; i++) {
+    const sel = document.getElementById('res'+i+'-'+raceId);
+    if (!sel) continue;
+    const cur = sel.value;
+    const race = state.races.find(r => r.id === raceId);
+    const taken = selected.filter(s => s.pos < i && s.val).map(s => s.val);
+    sel.innerHTML = '<option value="">選擇馬匹...</option>' +
+      race.horses.filter(h => !taken.includes(h.id) || h.id === cur)
+        .map(h => `<option value="${h.id}"${h.id===cur?' selected':''}>${h.name}</option>`).join('');
+  }
+}
+
+function settleRace(raceId) {
+  if(!confirm('結算後無法更改，確定要公布結果嗎？')) return;
+
+  const race = state.races.find(r=>r.id===raceId);
+  const n = race.horses.length;
+
+  // 收集 1~n 名
+  const positions = [];
+  for (let i = 1; i <= n; i++) {
+    const val = document.getElementById('res'+i+'-'+raceId)?.value || '';
+    positions.push(val);
+  }
+  const first  = positions[0];
+  const second = positions[1];
+  if(!first||!second) { toast('請至少選擇第1、2名'); return; }
+  const unique = new Set(positions.filter(Boolean));
+  if(unique.size < positions.filter(Boolean).length) { toast('同一匹馬不可重複出現！'); return; }
+
+  const rainbow1 = document.getElementById('rainbow1-'+raceId)?.checked || false;
+  const rainbow2 = document.getElementById('rainbow2-'+raceId)?.checked || false;
+  race.result = { first, second, rainbow1, rainbow2, positions };
+  race.status = 'finished';
+
+  state.bets.filter(b=>b.raceId===raceId&&!b.settled).forEach(bet=>{
+    bet.settled = true;
+    const betUser = state.users.find(u=>u.id===bet.userId);
+    if(bet.type==='win' && bet.horseId===first) {
+      const mult = rainbow1 ? 2 : 1;
+      bet.won=true; bet.payout=Math.round(bet.amount*bet.odds*mult);
+      if(betUser) betUser.points += bet.payout;
+    } else if(bet.type==='quinella' && [first,second].includes(bet.horseId) && [first,second].includes(bet.horseId2)) {
+      const mult = (rainbow1 ? 2 : 1) * (rainbow2 ? 2 : 1);
+      bet.won=true; bet.payout=Math.round(bet.amount*bet.odds*mult);
+      if(betUser) betUser.points += bet.payout;
+    } else {
+      bet.won=false; bet.payout=0;
+    }
+  });
+
+  const rainbowMsg = (rainbow1||rainbow2)
+    ? `🌈 彩虹馬加成：${rainbow1?'冠軍':''}${rainbow1&&rainbow2?'+':''}${rainbow2?'亞軍':''} ×${(rainbow1?2:1)*(rainbow2?2:1)}`
+    : '';
+  save();
+  const rankedCount = positions.filter(v=>v).length;
+  toast('✅ 結果已公布，彩金已發放！' + (rainbowMsg?' '+rainbowMsg:'') + `（已記錄 ${rankedCount} 匹馬名次）`);
+  renderAdmin();
+}
+
+// ===== 前場名次賠率調整 =====
+// 公式：factor(k, N) = 1 + (k - (N+1)/2) / (N-1) × sensitivity
+// 8匹馬 sensitivity=0.4：1名×0.80 / 2名×0.86 / ... / 8名×1.20
+// 公式：factor(k,N) = 1 + (k-(N+1)/2)/(N-1) × sensitivity
+// 8匹馬 sensitivity=0.6：1名×0.70 / 8名×1.30（每場最多±30%）
+// 賠率上限 100x，下限依馬匹序號（第1匹最低 1.1x，第8匹最低 1.8x）
+function calcNextRaceOdds(finishedRace) {
+  const horses = finishedRace.horses;
+  // Firebase 有時把 array 存成 object（{0:'',1:'',…}），強制轉回 array
+  const rawPos = finishedRace.result?.positions;
+  const positions = Array.isArray(rawPos)
+    ? rawPos
+    : (rawPos && typeof rawPos === 'object' ? Object.values(rawPos) : []);
+
+  const N = horses.length;
+  const sensitivity = 0.6;
+  const MAX_ODDS = 100;
+  const result = {};
+
+  // 先把有 id 的名次找出來（過濾空字串）
+  const ranked = positions.filter(id => id && typeof id === 'string');
+
+  horses.forEach((h, idx) => {
+    const minFloor = Math.round((1.1 + idx * 0.1) * 10) / 10;
+    const pos = ranked.indexOf(h.id); // 0-based in ranked list
+    if (pos === -1) {
+      // 未列名次：不調整（保持原賠率，僅套用下限/上限）
+      result[h.id] = Math.min(MAX_ODDS, Math.max(minFloor, h.odds));
+      return;
+    }
+    const k = pos + 1; // 1-based position
+    const factor = 1 + (k - (N + 1) / 2) / Math.max(1, N - 1) * sensitivity;
+    const raw = Math.round(h.odds * factor * 10) / 10;
+    result[h.id] = Math.min(MAX_ODDS, Math.max(minFloor, raw));
+  });
+  return result;
+}
+
+function cancelBet(id) {
+  const bet = state.bets.find(b=>b.id===id);
+  if(!bet) { toast('找不到該筆下注'); return; }
+  const race = state.races.find(r=>r.id===bet.raceId);
+  if(!race || race.status !== 'open') { toast('賽事已截止，無法取消'); return; }
+  const horse1 = (race.horses||[]).find(h=>h.id===bet.horseId);
+  const desc = bet.type==='quinella'
+    ? `連贏：${horse1?.name||'?'} ＋ ${(race.horses||[]).find(h=>h.id===bet.horseId2)?.name||'?'}（任意順序前兩名）`
+    : `獨贏：${horse1?.name||'此馬匹'}`;
+  if(!confirm(`確定取消「${desc}」的下注？\n${bet.amount} pts 將退回。`)) return;
+  const user = getUser();
+  user.points += bet.amount;
+  state.bets = state.bets.filter(b=>b.id!==id);
+  save();
+  toast('✅ 下注已取消，點數已退回');
+  renderSlip();
+}
+
+function removePendingBet(id) {
+  state.pendingBets = (state.pendingBets||[]).filter(b=>b.id!==id);
+  savePending();
+  toast('已移除該筆待送出下注');
+  // 刷新目前頁面
+  const activeTab = document.querySelector('.tab.active');
+  if(activeTab) renderPage(activeTab.dataset.tab);
+}
+
+function submitAllBets() {
+  const user = getUser();
+  const pending = (state.pendingBets||[]).filter(b=>b.userId===state.currentUser);
+  if(!pending.length) { toast('沒有待送出的下注'); return; }
+
+  // 檢查點數是否足夠
+  const total = pending.reduce((s,b)=>s+b.amount,0);
+  if(total > user.points) { toast('點數不足，請調整下注金額'); return; }
+
+  // 檢查有無重複（與已鎖定的 bets 衝突）
+  for(const pb of pending) {
+    let conflict;
+    if(pb.type === 'quinella') {
+      conflict = state.bets.find(b=>b.userId===state.currentUser&&b.raceId===pb.raceId&&b.type==='quinella'&&quinellaKey(b.horseId,b.horseId2)===quinellaKey(pb.horseId,pb.horseId2)&&!b.settled);
+    } else {
+      conflict = state.bets.find(b=>b.userId===state.currentUser&&b.raceId===pb.raceId&&b.horseId===pb.horseId&&b.type===pb.type&&!b.settled);
+    }
+    if(conflict) { toast(`已有相同下注，請先查看投注單`); return; }
+  }
+
+  // 寫入 bets，扣除點數
+  pending.forEach(pb=>{
+    const betObj = {id:'b'+Date.now()+'_'+Math.random().toString(36).slice(2,7),userId:state.currentUser,raceId:pb.raceId,horseId:pb.horseId,type:pb.type,amount:pb.amount,odds:pb.odds,settled:false,won:false,payout:0};
+    if(pb.type==='quinella' && pb.horseId2) betObj.horseId2 = pb.horseId2;
+    state.bets.push(betObj);
+    user.points -= pb.amount;
+  });
+
+  // 清空待送出清單
+  state.pendingBets = (state.pendingBets||[]).filter(b=>b.userId!==state.currentUser);
+  save();
+  toast(`✅ 已送出 ${pending.length} 筆下注！`);
+  const activeTab = document.querySelector('.tab.active');
+  if(activeTab) renderPage(activeTab.dataset.tab);
+}
+
+// ── 初始化連贏賠率（公式預設值）──
+function initQuinellaOdds(raceId) {
+  const race = state.races.find(r=>r.id===raceId);
+  if(!race) return;
+  race.quinellaOdds = {};
+  race.horses.forEach((h1,i)=>race.horses.forEach((h2,j)=>{
+    if(j>i) race.quinellaOdds[quinellaKey(h1.id,h2.id)] = Math.round((h1.odds+h2.odds)/2*10)/10;
+  }));
+  save();
+  toast('✅ 賠率已初始化！');
+  renderAdmin();
+}
+
+// ── 儲存連贏賠率矩陣（上三角 canonical key）──
+function saveQuinellaOdds(raceId) {
+  const race = state.races.find(r=>r.id===raceId);
+  if(!race) return;
+  if(!race.quinellaOdds) race.quinellaOdds = {};
+  let hasError = false;
+  race.horses.forEach((h1,i)=>race.horses.forEach((h2,j)=>{
+    if(j<=i) return;
+    const key = quinellaKey(h1.id,h2.id);
+    const inp = document.getElementById('eo_'+key);
+    if(inp) {
+      const val = parseFloat(inp.value);
+      if(isNaN(val)||val<1) { hasError=true; return; }
+      race.quinellaOdds[key] = Math.round(val*10)/10;
+    }
+  }));
+  if(hasError) { toast('⚠️ 部分賠率無效（需 ≥ 1），請檢查後再儲存'); return; }
+  save();
+  toast('✅ 二重彩賠率已儲存並同步！');
+}
+
+function adminAddUser() {
+  const nameInp = document.getElementById('admin-new-player-name');
+  const ptsInp  = document.getElementById('admin-new-player-pts');
+  const name = nameInp.value.trim();
+  if(!name) { toast('請輸入玩家名稱'); return; }
+  if(state.users.find(u=>u.name===name)) { toast('此名稱已存在'); return; }
+  const pts = parseInt(ptsInp.value)||getDefaultPoints();
+  const id = 'user_'+Date.now();
+  state.users.push({id, name, role:'player', points:pts, color:state.users.length%COLORS.length, nameChanged:true});
+  save(); nameInp.value=''; ptsInp.value=String(getDefaultPoints());
+  toast(`✅ 已新增玩家「${name}」`);
+  renderAdmin();
+}
+
+function adminResetPoints(userId) {
+  const user = state.users.find(u=>u.id===userId);
+  if(!user) return;
+  const dp = getDefaultPoints();
+  if(!confirm(`確定要將「${user.name}」的積分重置為 ${dp}？`)) return;
+  user.points = dp;
+  save();
+  toast(`✅ 已重置「${user.name}」積分`);
+  renderAdmin();
+}
+
+function adminDeleteUser(userId, userName) {
+  if(!confirm(`確定要刪除玩家「${userName}」？\n該玩家的下注紀錄也會一併移除。`)) return;
+  state.users = state.users.filter(u=>u.id!==userId);
+  state.bets  = state.bets.filter(b=>b.userId!==userId);
+  // 清除該玩家的待送出下注
+  if(state.pendingBets) state.pendingBets = state.pendingBets.filter(b=>b.userId!==userId);
+  save();
+  toast(`✅ 已刪除玩家「${userName}」`);
+  renderAdmin();
+}
+
+function toggleRequirePassword() {
+  state.requirePassword = state.requirePassword === false ? true : false;
+  save();
+  toast(state.requirePassword ? '🔒 密碼保護已開啟' : '🔓 密碼保護已關閉（測試模式）');
+  renderAdmin();
+}
+
+function clearAllData() {
+  if(!confirm('⚠️ 確定要清除所有賽事紀錄並重置所有玩家積分嗎？\n\n此操作不可復原！')) return;
+  const dp = getDefaultPoints();
+  if(!confirm(`再次確認：清除所有賽事、所有下注，並將所有玩家積分重置為 ${dp}？`)) return;
+  state.races = [];
+  state.bets = [];
+  state.activeRaceId = null;
+  state.users.forEach(u=>{ if(u.role!=='admin') u.points = dp; });
+  save();
+  toast('✅ 資料已清除，所有玩家積分已重置！');
+  renderAdmin();
+}
+
+// ============================================================
+// 🏁 比賽結果動畫
+// ============================================================
+let _prevRaceStatuses = {};
+
+function showRaceResultAnimation(race) {
+  const overlay = document.getElementById('race-result-overlay');
+  const track   = document.getElementById('rro-track');
+  const finLine = document.getElementById('rro-finish-line');
+  const card    = document.getElementById('rro-result-card');
+  if (!overlay || !race || !race.result) return;
+
+  // 填入結果名稱
+  const firstName  = race.horses.find(h=>h.id===race.result.first)?.name  || '—';
+  const secondName = race.horses.find(h=>h.id===race.result.second)?.name || '—';
+  document.getElementById('rro-first-name').textContent  = firstName;
+  document.getElementById('rro-second-name').textContent = secondName;
+
+  // 清空跑道舊馬匹
+  track.querySelectorAll('.rro-horse-wrap').forEach(el=>el.remove());
+  finLine.classList.remove('visible');
+  card.classList.remove('visible');
+
+  // ── 只顯示冠軍和亞軍兩匹 ──
+  const twoHorses = [
+    { horse: race.horses.find(h=>h.id===race.result.first),  rank:0, badge:'🏆', duration:2.3 },
+    { horse: race.horses.find(h=>h.id===race.result.second), rank:1, badge:'🥈', duration:3.0 }
+  ].filter(d=>d.horse);
+
+  // 馬匹配色：冠軍棕馬粉騎師 / 亞軍深灰馬藍騎師
+  const palette = [
+    { bc:'#8B4513', mc:'#5C2E00', jc:'#FF69B4', hc:'#C2185B' },
+    { bc:'#3A3A3A', mc:'#1a1a1a', jc:'#1565C0', hc:'#0D47A1' }
+  ];
+
+  function _horseSVG(p, numLabel) {
+    return `<svg viewBox="0 0 230 115" xmlns="http://www.w3.org/2000/svg" width="230" height="115">
+      <!-- 尾巴 -->
+      <path d="M32,62 Q8,48 12,78 Q16,92 30,84" fill="${p.bc}" stroke="${p.bc}" stroke-width="3"/>
+      <!-- 身體 -->
+      <ellipse cx="105" cy="72" rx="70" ry="30" fill="${p.bc}"/>
+      <!-- 脖子 -->
+      <path d="M150,58 Q165,38 170,28" stroke="${p.bc}" stroke-width="22" stroke-linecap="round" fill="none"/>
+      <!-- 頭 -->
+      <ellipse cx="174" cy="23" rx="20" ry="13" fill="${p.bc}" transform="rotate(-15,174,23)"/>
+      <!-- 鼻孔 -->
+      <circle cx="185" cy="26" r="3" fill="${p.mc}"/>
+      <!-- 眼睛 -->
+      <circle cx="175" cy="17" r="3" fill="#111"/>
+      <circle cx="176" cy="16" r="1" fill="white"/>
+      <!-- 耳朵 -->
+      <polygon points="164,13 169,3 174,13" fill="${p.bc}"/>
+      <!-- 鬃毛 -->
+      <path d="M158,27 Q150,42 154,58" stroke="${p.mc}" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <!-- 前腿（伸展） -->
+      <path d="M148,95 L164,113" stroke="${p.bc}" stroke-width="10" stroke-linecap="round"/>
+      <path d="M130,95 L112,113" stroke="${p.bc}" stroke-width="10" stroke-linecap="round"/>
+      <!-- 後腿（伸展） -->
+      <path d="M72,95 L56,113" stroke="${p.bc}" stroke-width="10" stroke-linecap="round"/>
+      <path d="M58,95 L76,113" stroke="${p.bc}" stroke-width="10" stroke-linecap="round"/>
+      <!-- 蹄 -->
+      <ellipse cx="164" cy="113" rx="8" ry="3" fill="#111"/>
+      <ellipse cx="112" cy="113" rx="8" ry="3" fill="#111"/>
+      <ellipse cx="56"  cy="113" rx="8" ry="3" fill="#111"/>
+      <ellipse cx="76"  cy="113" rx="8" ry="3" fill="#111"/>
+      <!-- 號碼布 -->
+      <rect x="90" y="54" rx="5" ry="5" width="32" height="22" fill="white" opacity="0.95"/>
+      <text x="106" y="70" text-anchor="middle" font-size="14" font-weight="bold" fill="#222" font-family="Arial">${numLabel}</text>
+      <!-- 騎師身體 -->
+      <path d="M103,54 Q118,34 135,46 L130,62 Q114,68 103,54z" fill="${p.jc}"/>
+      <!-- 騎師頭盔 -->
+      <circle cx="136" cy="40" r="12" fill="${p.jc}"/>
+      <ellipse cx="136" cy="31" rx="13" ry="9" fill="${p.hc}"/>
+      <rect x="125" y="38" width="22" height="4" rx="2" fill="${p.hc}"/>
+      <!-- 騎師臉 -->
+      <circle cx="136" cy="43" r="8" fill="#FDBCB4"/>
+      <!-- 護目鏡 -->
+      <path d="M129,40 Q136,38 143,40" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <!-- 馬鞭 -->
+      <line x1="128" y1="54" x2="110" y2="80" stroke="#555" stroke-width="2"/>
+    </svg>`;
+  }
+
+  // 第一名上方，第二名下方；名字放 SVG 上方避免底部截斷
+  const laneTopList = [10, 148];
+  const horseWidth  = 230;
+
+  // 終點線在 right:15%，即 left:85% of trackW
+  // 第一名：馬身一半超過終點線（中心對齊終點線）
+  // 第二名：馬鼻剛好到終點線（右邊緣對齊終點線）
+  function _getStopX(rank) {
+    const trackW = track.offsetWidth || window.innerWidth;
+    const finishX = trackW * 0.85;
+    if (rank === 0) return Math.round(finishX - horseWidth / 2); // 中心在終點線
+    else            return Math.round(finishX - horseWidth - 10); // 馬鼻貼終點線前
+  }
+
+  twoHorses.forEach((d, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'rro-horse-wrap';
+    wrap.style.animation = 'none';
+    wrap.style.top = laneTopList[i] + 'px';
+    wrap.style.transform = 'translateX(0px)'; // 起點 = 紅框左邊緣
+
+    const horseIdx = race.horses.findIndex(h=>h.id===d.horse.id);
+    const numLabel = horseIdx >= 0 ? (horseIdx + 1) : '';
+
+    // 名字在上方，badge 在名字左側
+    wrap.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+          <span style="font-size:18px;">${d.badge}</span>
+          <div class="rro-horse-name" style="margin:0;">${d.horse.name}</div>
+        </div>
+        ${_horseSVG(palette[i], numLabel)}
+      </div>`;
+    track.appendChild(wrap);
+
+    requestAnimationFrame(() => {
+      const stopX = _getStopX(i);
+      wrap.animate([
+        { transform: 'translateX(0px)' },
+        { transform: `translateX(${stopX}px)` }
+      ], {
+        duration: d.duration * 1000,
+        delay: 0,
+        fill: 'forwards',
+        easing: 'linear'
+      });
+    });
+  });
+
+  // 顯示終點線（略作延遲讓馬先跑幾步）
+  setTimeout(() => { finLine.classList.add('visible'); }, 400);
+
+  // 顯示 overlay
+  overlay.classList.add('rro-active');
+
+  // 彩帶
+  _spawnConfetti(overlay);
+
+  // 馬跑完後顯示結果卡
+  setTimeout(() => {
+    card.classList.add('visible');
+  }, 3000);
+}
+
+function _spawnConfetti(container) {
+  const colors = ['#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#ec4899','#fbbf24','#34d399'];
+  for (let i = 0; i < 55; i++) {
+    const el = document.createElement('div');
+    el.className = 'rro-confetti';
+    el.style.left     = Math.random() * 100 + 'vw';
+    el.style.top      = '-20px';
+    el.style.background = colors[Math.floor(Math.random() * colors.length)];
+    el.style.width    = (7 + Math.random() * 9) + 'px';
+    el.style.height   = (7 + Math.random() * 9) + 'px';
+    el.style.borderRadius = Math.random() > 0.4 ? '50%' : '2px';
+    el.style.animationDuration  = (2.5 + Math.random() * 2.5) + 's';
+    el.style.animationDelay     = (Math.random() * 2) + 's';
+    container.appendChild(el);
+    // 動畫完成後移除
+    el.addEventListener('animationend', ()=>el.remove());
+  }
+}
+
+function closeRaceResultAnimation() {
+  const overlay = document.getElementById('race-result-overlay');
+  if (overlay) overlay.classList.remove('rro-active');
+}
+
+// ============================================================
+// 🔥 Firebase 即時同步：從資料庫載入資料，並監聽所有使用者的即時變更
+// ============================================================
+let _fbInitialized = false;
+
+STATE_REF.on('value', snapshot => {
+  const data = snapshot.val();
+
+  if (!_fbInitialized) {
+    // ── 第一次載入：從 Firebase 讀取共享資料 ──
+    _fbInitialized = true;
+
+    if (data) {
+      if (data.users) state.users = data.users;
+      if (data.races) state.races = data.races;
+      if (data.bets) state.bets = data.bets;
+      if (data.activeRaceId !== undefined) state.activeRaceId = data.activeRaceId;
+      if (data.requirePassword !== undefined) state.requirePassword = data.requirePassword;
+      // 記錄初始賽事狀態（避免首次載入觸發動畫）
+      if (data.races) data.races.forEach(r => { _prevRaceStatuses[r.id] = r.status; });
+    }
+
+    // ── 從 Firebase 載入全域設定（馬匹名稱、二重彩賠率）──
+    // 使用獨立路徑 hrapp_settings，不被 clearAllData() 清除
+    SETTINGS_REF.once('value', function(snap) {
+      const s = snap.val();
+      if (!s) return;
+      let changed = false;
+      if (s.horses && Array.isArray(s.horses) && s.horses.length === DEFAULT_HORSES.length) {
+        DEFAULT_HORSES = s.horses;
+        try { localStorage.setItem('hrapp_default_horses', JSON.stringify(DEFAULT_HORSES)); } catch(e) {}
+        changed = true;
+      }
+      if (s.quinella && typeof s.quinella === 'object') {
+        _DEFAULT_QUINELLA = s.quinella;
+        try { localStorage.setItem('hrapp_default_quinella', JSON.stringify(_DEFAULT_QUINELLA)); } catch(e) {}
+        changed = true;
+      }
+      // 如果管理員已在管理頁，重新渲染以顯示最新設定
+      if (changed) {
+        const activeTab = document.querySelector('.tab.active');
+        if (activeTab && activeTab.dataset.tab === 'admin') renderAdmin();
+      }
+    });
+
+    // 從 localStorage 恢復此裝置上的登入狀態
+    try {
+      const local = JSON.parse(localStorage.getItem('hrapp_local') || '{}');
+      if (local.currentUser && state.users.find(u => u.id === local.currentUser)) {
+        state.currentUser = local.currentUser;
+      }
+      if (local.pendingBets) state.pendingBets = local.pendingBets;
+    } catch(e) {}
+
+    // 隱藏 loading 畫面
+    const loadingEl = document.getElementById('loading-overlay');
+    if (loadingEl) loadingEl.style.display = 'none';
+
+    // 套用 UI 縮放（從 localStorage 讀取，預設 2.5x）
+    applyFontScale();
+
+    // 渲染 App
+    if (state.currentUser) {
+      enterMainView(getUser());
+    } else {
+      renderLogin();
+    }
+
+  } else {
+    // ── 後續更新：有其他人改了資料，同步本機狀態並重新渲染 ──
+    if (!data) return;
+
+    // 保留本機專屬的狀態（登入者、待確認下注、下注類型）
+    const cu = state.currentUser;
+    const pb = state.pendingBet;
+    const bt = state.currentBetType;
+
+    if (data.users) state.users = data.users;
+    if (data.races) state.races = data.races;
+    if (data.bets) state.bets = data.bets;
+    if (data.activeRaceId !== undefined) state.activeRaceId = data.activeRaceId;
+    if (data.requirePassword !== undefined) state.requirePassword = data.requirePassword;
+
+    state.currentUser = cu;
+    state.pendingBet = pb;
+    state.currentBetType = bt;
+
+    // ── 偵測剛結束的比賽 → 非管理員顯示結果動畫 ──
+    const _me = state.currentUser ? state.users.find(u=>u.id===state.currentUser) : null;
+    if (_me && _me.role !== 'admin' && data.races) {
+      data.races.forEach(race => {
+        const wasFinished = (_prevRaceStatuses[race.id] === 'finished');
+        if (race.status === 'finished' && !wasFinished && race.result) {
+          showRaceResultAnimation(race);
+        }
+        _prevRaceStatuses[race.id] = race.status;
+      });
+    } else if (data.races) {
+      // 管理員也更新快照（不顯示動畫）
+      data.races.forEach(race => { _prevRaceStatuses[race.id] = race.status; });
+    }
+
+    // 重新渲染目前頁面（admin 頁不自動刷新，避免打斷管理員操作）
+    if (state.currentUser) {
+      const activeTab = document.querySelector('.tab.active');
+      if (activeTab && activeTab.dataset.tab !== 'admin') {
+        renderPage(activeTab.dataset.tab);
+      }
+    } else {
+      renderLogin();
+    }
+  }
+
+}, err => {
+  // ── 連線失敗處理 ──
+  console.error('Firebase 連線失敗:', err);
+  const el = document.getElementById('loading-overlay');
+  if (el) el.innerHTML = `
+    <div style="text-align:center;padding:20px;">
+      <div style="font-size:calc(48px * var(--font-multiplier));margin-bottom:16px;">⚠️</div>
+      <div style="font-size:calc(18px * var(--font-multiplier));font-weight:700;color:#dc2626;">資料庫連線失敗</div>
+      <p style="color:#6b7280;margin-top:10px;font-size:calc(14px * var(--font-multiplier));line-height:1.6;">
+        請確認 Firebase 設定是否正確<br>並檢查 Realtime Database 規則是否開放讀寫
+      </p>
+    </div>`;
+});
+
+// ── 自動關閉下注通道：每 30 秒檢查一次發車時間 ──
+setInterval(function() {
+  if (!_fbInitialized || !state || !state.races) return;
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  const currentTime = hh + ':' + mm;
+  let changed = false;
+  state.races.forEach(function(race) {
+    if (race.status === 'open' && race.time && race.time <= currentTime) {
+      race.status = 'closed';
+      changed = true;
+    }
+  });
+  if (changed) {
+    save();
+    toast('⏰ 已自動關閉截止時間到期的下注通道');
+    const activeTab = document.querySelector('.tab.active');
+    if (activeTab) renderPage(activeTab.dataset.tab);
+  }
+}, 30000);
+
+// ── 收放管理區塊 ──
+function toggleAdminSection(key) {
+  const body = document.getElementById('admin-sec-' + key);
+  if (!body) return;
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  localStorage.setItem('hrapp_sec_' + key, isHidden ? '1' : '0');
+  const ic = document.getElementById('admin-sec-ic-' + key);
+  if (ic) ic.textContent = isHidden ? '▲' : '▼';
+}
+function isSectionOpen(key) {
+  return localStorage.getItem('hrapp_sec_' + key) !== '0';
+}
+function adminSectionHeader(key, emoji, title, style) {
+  const open = isSectionOpen(key);
+  return `<div onclick="toggleAdminSection('${key}')" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;${style||''}">
+    <h3 style="font-size:calc(15px * var(--font-multiplier));font-weight:700;display:flex;align-items:center;gap:6px;">${emoji} ${title}</h3>
+    <span id="admin-sec-ic-${key}" style="font-size:calc(13px * var(--font-multiplier));color:#9ca3af;">${open?'▲':'▼'}</span>
+  </div>`;
+}
+function adminSectionBody(key, html) {
+  const open = isSectionOpen(key);
+  return `<div id="admin-sec-${key}" style="display:${open?'':'none'};margin-top:12px;">${html}</div>`;
+}
+
+</script>
+
+<!-- ════════ 比賽結果動畫 Overlay ════════ -->
+<div id="race-result-overlay">
+  <div id="rro-track">
+    <div id="rro-finish-line"></div>
+    <!-- 馬匹由 JS 動態注入 -->
+  </div>
+  <div id="rro-result-card">
+    <span class="rro-flag">🏁</span>
+    <div class="rro-headline">比賽結果出爐！</div>
+    <div class="rro-place rro-place-1">
+      <div class="rro-place-icon">🏆</div>
+      <div class="rro-place-info">
+        <div class="rro-place-label">冠　軍</div>
+        <div class="rro-place-name" id="rro-first-name">—</div>
+      </div>
+    </div>
+    <div class="rro-place rro-place-2">
+      <div class="rro-place-icon">🥈</div>
+      <div class="rro-place-info">
+        <div class="rro-place-label">亞　軍</div>
+        <div class="rro-place-name" id="rro-second-name">—</div>
+      </div>
+    </div>
+    <button class="rro-close-btn" onclick="closeRaceResultAnimation()">✅ 確認</button>
+  </div>
+</div>
+
+<!-- 轉盤覆蓋層 -->
+<div id="wheel-overlay">
+  <button id="wheel-back-btn" onclick="closeWheel()">← 返回管理</button>
+  <button id="wheel-info-btn" onclick="document.getElementById('wheel-info-modal').classList.remove('hidden')">ℹ️ 規則與機率</button>
+
+  <div id="wheel-info-modal" class="hidden">
+    <div class="wh-modal-content">
+      <span style="position:absolute;top:15px;right:20px;font-size:28px;font-weight:bold;color:#888;cursor:pointer;"
+            onclick="document.getElementById('wheel-info-modal').classList.add('hidden')">&times;</span>
+      <h2 style="font-size:24px;font-weight:900;margin:0 0 15px;color:#333;text-align:center;">雙層同軸 命運轉盤</h2>
+      <div style="margin-bottom:20px;">
+        <h3 style="font-size:16px;margin:0 0 8px;color:#0056b3;border-bottom:2px solid #e9ecef;padding-bottom:5px;">🎮 玩法與規則</h3>
+        <ul style="padding-left:20px;margin:0;font-size:13px;color:#555;line-height:1.8;">
+          <li><strong>點擊啟動：</strong>點擊轉盤即可啟動。</li>
+          <li><strong>雙向旋轉：</strong>外圈(馬匹)逆時針，內圈(命運)順時針旋轉！</li>
+          <li><strong>分段開獎：</strong>外圈 3 秒先鎖定對象，內圈 6 秒揭曉命運。</li>
+        </ul>
+      </div>
+      <div>
+        <h3 style="font-size:16px;margin:0 0 8px;color:#0056b3;border-bottom:2px solid #e9ecef;padding-bottom:5px;">📊 完整選項機率表</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <tr><th style="border:1px solid #dee2e6;padding:6px;background:#f8f9fa;">選項內容</th><th style="border:1px solid #dee2e6;padding:6px;background:#f8f9fa;">格數</th><th style="border:1px solid #dee2e6;padding:6px;background:#f8f9fa;">機率</th></tr>
+          <tr style="color:#c71585;font-weight:bold;text-align:center;"><td style="border:1px solid #dee2e6;padding:6px;font-size:11px;">JACKPOT</td><td style="border:1px solid #dee2e6;padding:6px;">1 格</td><td style="border:1px solid #dee2e6;padding:6px;">6%</td></tr>
+          <tr style="color:#1b5e20;font-weight:bold;text-align:center;"><td style="border:1px solid #dee2e6;padding:6px;">前進兩步</td><td style="border:1px solid #dee2e6;padding:6px;">2 格</td><td style="border:1px solid #dee2e6;padding:6px;">11%</td></tr>
+          <tr style="color:#1b5e20;font-weight:bold;text-align:center;"><td style="border:1px solid #dee2e6;padding:6px;">前進一步</td><td style="border:1px solid #dee2e6;padding:6px;">6 格</td><td style="border:1px solid #dee2e6;padding:6px;">33%</td></tr>
+          <tr style="color:#b71c1c;font-weight:bold;text-align:center;"><td style="border:1px solid #dee2e6;padding:6px;">後退一步</td><td style="border:1px solid #dee2e6;padding:6px;">6 格</td><td style="border:1px solid #dee2e6;padding:6px;">33%</td></tr>
+          <tr style="color:#b71c1c;font-weight:bold;text-align:center;"><td style="border:1px solid #dee2e6;padding:6px;">後退兩步</td><td style="border:1px solid #dee2e6;padding:6px;">2 格</td><td style="border:1px solid #dee2e6;padding:6px;">11%</td></tr>
+          <tr style="color:#d39e00;font-weight:bold;text-align:center;"><td style="border:1px solid #dee2e6;padding:6px;">回到原點</td><td style="border:1px solid #dee2e6;padding:6px;">1 格</td><td style="border:1px solid #dee2e6;padding:6px;">6%</td></tr>
+        </table>
+        <p style="font-size:11px;text-align:center;margin-top:6px;color:#888;">* 外圈為 8 匹馬均等機率 (12.5%)</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="wh-game-panel">
+    <div id="jackpot-banner">✨ 雙向同步啟動：外圈選對象 / 內圈抽命運 ✨</div>
+    <div id="wheel-and-result">
+      <div id="wh-container">
+        <div id="wh-pointer-container">
+          <div id="wh-pointer-base"></div>
+          <div id="wh-pointer"></div>
+        </div>
+        <div id="wh-outer"></div>
+        <div id="wh-inner"></div>
+      </div>
+      <div id="wh-result-card">
+        <p class="wh-res-horse" id="wh-rh"></p>
+        <p class="wh-res-title" id="wh-rt"></p>
+        <p class="wh-res-desc"  id="wh-rd"></p>
+      </div>
+    </div>
+  </div>
+
+  <button id="jp-cheat-btn" title="必中 JACKPOT（開啟/關閉）" onclick="toggleJpCheat()">
+    <span>✅</span>
+    <span class="cheat-label">JP必中</span>
+  </button>
+  <button id="wh-reset-btn" title="重新開始">🔄</button>
+
+  <!-- JACKPOT 玩家小轉盤 -->
+  <div id="jp-overlay">
+    <div id="jp-title">🎰 JACKPOT！玩家抽獎 🎰</div>
+    <div id="jp-sub-title">轉到的玩家可獲得本局總獎金 10%（現金獎勵）</div>
+    <div id="jp-wheel-wrap">
+      <div id="jp-pointer-top"></div>
+      <canvas id="jp-canvas" width="300" height="300"></canvas>
+    </div>
+    <div id="jp-spin-hint">點擊轉盤再次旋轉</div>
+    <div id="jp-result"></div>
+    <button id="jp-spin-btn" onclick="jpSpin()">🔄 再轉一次</button>
+    <button id="jp-close-btn" onclick="closeJackpotWheel()">✅ 確認</button>
+  </div>
+</div>
+
+<script>
+// ===== 轉盤邏輯 =====
+const WH = {
+  angleOuter:0, angleInner:0, isSpinning:false,
+  velOuter:0, velInner:0, animationId:null,
+  lastPegIndex:-1, outerStopped:false,
+  outerTextEls:[], innerTextEls:[], outerOptions:[]
+};
+
+const WH_INNER_OPTIONS = [
+  { n:'<span style="font-size:13px;letter-spacing:-0.5px;font-family:Arial,sans-serif;">JACKPOT</span>', fullName:'🎰 JACKPOT 玩家抽獎', c:'開啟玩家幸運轉盤，抽出總獎金 10%！', color:'#c71585' },
+  { n:'前進一步', fullName:'前進一步', c:'穩紮穩打！', color:'#1b5e20' },
+  { n:'後退一步', fullName:'後退一步', c:'倒退嚕！', color:'#b71c1c' },
+  { n:'前進兩步', fullName:'前進兩步', c:'健步如飛！', color:'#1b5e20' },
+  { n:'後退一步', fullName:'後退一步', c:'倒退嚕！', color:'#b71c1c' },
+  { n:'前進一步', fullName:'前進一步', c:'穩紮穩打！', color:'#1b5e20' },
+  { n:'後退一步', fullName:'後退一步', c:'倒退嚕！', color:'#b71c1c' },
+  { n:'前進兩步', fullName:'前進兩步', c:'健步如飛！', color:'#1b5e20' },
+  { n:'後退兩步', fullName:'後退兩步', c:'慘不忍睹！', color:'#b71c1c' },
+  { n:'回到原點', fullName:'回到原點', c:'一切重來！', color:'#fbc02d' },
+  { n:'前進一步', fullName:'前進一步', c:'穩紮穩打！', color:'#1b5e20' },
+  { n:'後退一步', fullName:'後退一步', c:'倒退嚕！', color:'#b71c1c' },
+  { n:'前進一步', fullName:'前進一步', c:'穩紮穩打！', color:'#1b5e20' },
+  { n:'後退一步', fullName:'後退一步', c:'倒退嚕！', color:'#b71c1c' },
+  { n:'前進一步', fullName:'前進一步', c:'穩紮穩打！', color:'#1b5e20' },
+  { n:'後退一步', fullName:'後退一步', c:'倒退嚕！', color:'#b71c1c' },
+  { n:'前進一步', fullName:'前進一步', c:'穩紮穩打！', color:'#1b5e20' },
+  { n:'後退兩步', fullName:'後退兩步', c:'慘不忍睹！', color:'#b71c1c' }
+];
+
+function openWheel() {
+  // 從 DEFAULT_HORSES 取最新馬匹名稱（與下注系統同步）
+  const names = DEFAULT_HORSES.slice(0, 8).map(h => h.name);
+  whInitWheel(names);
+  document.getElementById('wheel-overlay').classList.add('open');
+}
+
+function closeWheel() {
+  document.getElementById('wheel-overlay').classList.remove('open');
+  WH.isSpinning = false; WH.velOuter = 0; WH.velInner = 0;
+  cancelAnimationFrame(WH.animationId);
+}
+
+function whInitWheel(outerOptions) {
+  const outerEl = document.getElementById('wh-outer');
+  const innerEl = document.getElementById('wh-inner');
+  outerEl.innerHTML = ''; innerEl.innerHTML = '';
+  WH.outerTextEls = []; WH.innerTextEls = [];
+  WH.outerOptions = outerOptions;
+  WH.angleOuter = 0; WH.angleInner = 0;
+  WH.isSpinning = false; WH.velOuter = 0; WH.velInner = 0;
+  WH.lastPegIndex = -1; WH.outerStopped = false;
+  outerEl.style.transform = ''; innerEl.style.transform = '';
+
+  for (let i = 0; i < 8; i++) {
+    const line = document.createElement('div');
+    line.className = 'wh-outer-border';
+    line.style.transform = 'rotate(' + (i * 45) + 'deg)';
+    outerEl.appendChild(line);
+
+    const peg = document.createElement('div');
+    peg.className = 'wh-peg';
+    peg.style.transform = 'translateX(-50%) rotate(' + (i * 45) + 'deg)';
+    outerEl.appendChild(peg);
+
+    const text = document.createElement('div');
+    text.className = 'wh-outer-text';
+    text.style.transform = 'translateX(-50%) rotate(' + (i * 45 + 22.5) + 'deg)';
+    text.innerText = outerOptions[i] || (String.fromCharCode(65 + i) + '馬');
+    outerEl.appendChild(text);
+    WH.outerTextEls.push(text);
+  }
+
+  for (let i = 0; i < 9; i++) {
+    const line = document.createElement('div');
+    line.className = 'wh-inner-border';
+    line.style.transform = 'rotate(' + (i * 20) + 'deg)';
+    innerEl.appendChild(line);
+  }
+
+  WH_INNER_OPTIONS.forEach(function(opt, i) {
+    const text = document.createElement('div');
+    text.className = 'wh-inner-text';
+    text.style.transform = 'translateX(-50%) rotate(' + (i * 20 + 10) + 'deg)';
+    text.innerHTML = opt.n;
+    if (opt.color === '#fbc02d') { text.style.color = '#222'; text.style.textShadow = 'none'; }
+    innerEl.appendChild(text);
+    WH.innerTextEls.push(text);
+  });
+
+  document.getElementById('wh-result-card').classList.remove('show');
+  const ptr = document.getElementById('wh-pointer');
+  ptr.className = ''; ptr.style.transform = 'rotate(0deg)';
+}
+
+function whNorm(angle) { let a = angle % 360; if (a < 0) a += 360; return a; }
+function whPtrAngle(angle) { return (360 - whNorm(angle)) % 360; }
+
+function whStartSpin(power) {
+  if (WH.isSpinning) return;
+  WH.isSpinning = true; WH.outerStopped = false;
+  document.getElementById('wh-result-card').classList.remove('show');
+  WH.outerTextEls.forEach(function(el){ el.classList.remove('wh-winning-glow'); });
+  WH.innerTextEls.forEach(function(el){ el.classList.remove('wh-winning-glow'); });
+  WH.velOuter = power + Math.random() * 4;
+  WH.velInner = power + Math.random() * 6 + 2;
+  const ptr = document.getElementById('wh-pointer');
+  ptr.className = ''; ptr.style.transition = 'none'; ptr.style.transform = 'rotate(0deg)';
+  WH.lastPegIndex = -1;
+
+  const outerEl = document.getElementById('wh-outer');
+  const innerEl = document.getElementById('wh-inner');
+  const outerFriction = 0.969, innerFriction = 0.985;
+
+  const loop = function() {
+    if (!WH.isSpinning) return;
+
+    if (WH.velOuter > 0.1) {
+      WH.angleOuter -= WH.velOuter;
+      WH.velOuter *= outerFriction;
+      outerEl.style.transform = 'rotate(' + WH.angleOuter + 'deg)';
+      const pegIdx = Math.floor(whPtrAngle(WH.angleOuter) / 45);
+      if (pegIdx !== WH.lastPegIndex) {
+        const offset = Math.min(20, WH.velOuter * 1.5);
+        ptr.style.transition = 'transform 0.05s ease-out';
+        ptr.style.transform = 'rotate(' + (-offset) + 'deg)';
+        WH.lastPegIndex = pegIdx;
+      } else { ptr.style.transform = 'rotate(0deg)'; }
+    } else if (!WH.outerStopped) {
+      WH.velOuter = 0; WH.outerStopped = true;
+      if (whApplySlip('outer', WH.angleOuter, 45)) {
+        outerEl.style.transition = 'transform 0.2s cubic-bezier(0.25,0.1,0.25,1)';
+        outerEl.style.transform = 'rotate(' + WH.angleOuter + 'deg)';
+      }
+      ptr.style.transition = 'none'; ptr.style.transform = 'rotate(0deg)'; ptr.offsetHeight;
+    }
+
+    if (WH.velInner > 0.1) {
+      WH.angleInner += WH.velInner;
+      WH.velInner *= innerFriction;
+      innerEl.style.transform = 'rotate(' + WH.angleInner + 'deg)';
+    } else { WH.velInner = 0; }
+
+    if (WH.velOuter > 0 || WH.velInner > 0) {
+      WH.animationId = requestAnimationFrame(loop);
+    } else { whStopGame(); }
+  };
+  WH.animationId = requestAnimationFrame(loop);
+}
+
+var WH_JP_CHEAT = false;
+function toggleJpCheat() {
+  WH_JP_CHEAT = !WH_JP_CHEAT;
+  var btn = document.getElementById('jp-cheat-btn');
+  btn.classList.toggle('active', WH_JP_CHEAT);
+  btn.querySelector('span').textContent = WH_JP_CHEAT ? '🎰' : '✅';
+  toast(WH_JP_CHEAT ? '🎰 JP必中模式 已開啟' : '✅ JP必中模式 已關閉');
+}
+
+function whStopGame() {
+  WH.isSpinning = false; WH.velOuter = 0; WH.velInner = 0;
+  cancelAnimationFrame(WH.animationId);
+  // 必中 JP 作弊：強制內圈角度落在 index 0（JACKPOT）
+  if (WH_JP_CHEAT) {
+    // whPtrAngle(a) = ((360-(a%360))+360)%360；要讓結果=10（slot 0 中央）
+    // → a%360 = 350，取最近的整數圈數
+    var fullRounds = Math.floor(WH.angleInner / 360);
+    WH.angleInner = fullRounds * 360 + 350;
+    document.getElementById('wh-inner').style.transition = 'transform 0.4s cubic-bezier(0.25,0.1,0.25,1)';
+    document.getElementById('wh-inner').style.transform = 'rotate(' + WH.angleInner + 'deg)';
+  }
+  const innerEl = document.getElementById('wh-inner');
+  const slipped = whApplySlip('inner', WH.angleInner, 20);
+  if (slipped) {
+    innerEl.style.transition = 'transform 0.2s cubic-bezier(0.25,0.1,0.25,1)';
+    innerEl.style.transform = 'rotate(' + WH.angleInner + 'deg)';
+  }
+  const idxOuter = Math.floor(whPtrAngle(WH.angleOuter) / 45) % 8;
+  const idxInner = Math.floor(whPtrAngle(WH.angleInner) / 20) % 18;
+  const resOuter = WH.outerOptions[idxOuter] || (String.fromCharCode(65 + idxOuter) + '馬');
+  const resInner = WH_INNER_OPTIONS[idxInner];
+
+  setTimeout(function() {
+    WH.outerTextEls[idxOuter].classList.add('wh-winning-glow');
+    WH.innerTextEls[idxInner].classList.add('wh-winning-glow');
+    document.getElementById('wh-rh').innerText = '[ ' + resOuter + ' ]';
+    document.getElementById('wh-rt').innerText = resInner.fullName;
+    document.getElementById('wh-rd').innerText = resInner.c;
+    const card = document.getElementById('wh-result-card');
+    card.style.backgroundColor = resInner.color;
+    const tc = resInner.color === '#fbc02d' ? '#222' : '#fff';
+    ['wh-rh','wh-rt','wh-rd'].forEach(function(id){ document.getElementById(id).style.color = tc; });
+    document.getElementById('wh-outer').style.transition = 'none';
+    innerEl.style.transition = 'none';
+
+    // JACKPOT → 開玩家小轉盤
+    if (idxInner === 0) {
+      // 先短暫顯示主結果卡，再跳出 JP 轉盤
+      card.classList.add('show');
+      setTimeout(function() { openJackpotWheel(resOuter); }, 800);
+    } else {
+      card.classList.add('show');
+    }
+  }, slipped ? 200 : 0);
+}
+
+function whApplySlip(type, angleVar, sliceAngle) {
+  const pa = whPtrAngle(angleVar);
+  const off = pa % sliceAngle;
+  const margin = type === 'outer' ? 3 : 2;
+  let slipped = false;
+  if (off < margin) {
+    angleVar -= (type === 'outer' ? -(margin - off + 0.5) : (margin - off + 0.5)); slipped = true;
+  } else if (off > sliceAngle - margin) {
+    angleVar += (type === 'outer' ? -(off - (sliceAngle - margin) + 0.5) : (off - (sliceAngle - margin) + 0.5)); slipped = true;
+  }
+  if (type === 'outer') WH.angleOuter = angleVar; else WH.angleInner = angleVar;
+  return slipped;
+}
+
+document.getElementById('wh-container').addEventListener('click', function() {
+  if (WH.isSpinning) return;
+  if (!document.getElementById('wheel-info-modal').classList.contains('hidden')) return;
+  whStartSpin(25);
+});
+
+document.getElementById('wh-reset-btn').addEventListener('click', function() {
+  WH.isSpinning = false; WH.velOuter = 0; WH.velInner = 0;
+  WH.angleOuter = 0; WH.angleInner = 0; WH.outerStopped = false;
+  cancelAnimationFrame(WH.animationId);
+  WH.outerTextEls.forEach(function(el){ el.classList.remove('wh-winning-glow'); });
+  WH.innerTextEls.forEach(function(el){ el.classList.remove('wh-winning-glow'); });
+  document.getElementById('wh-outer').style.transform = 'rotate(0deg)';
+  document.getElementById('wh-inner').style.transform = 'rotate(0deg)';
+  const ptr = document.getElementById('wh-pointer'); ptr.className = ''; ptr.style.transform = 'rotate(0deg)';
+  document.getElementById('wh-result-card').classList.remove('show');
+  whInitWheel(WH.outerOptions);
+});
+
+document.getElementById('wheel-info-modal').addEventListener('mousedown', function(e) {
+  if (e.target === document.getElementById('wheel-info-modal'))
+    document.getElementById('wheel-info-modal').classList.add('hidden');
+});
+
+// ===== JACKPOT 玩家小轉盤 =====
+var JP = {
+  isSpinning: false, angle: 0, vel: 0, animId: null,
+  players: [], colors: [], winningHorse: ''
+};
+var JP_COLORS = [
+  '#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6',
+  '#1abc9c','#e67e22','#c0392b','#16a085','#8e44ad',
+  '#2980b9','#d35400','#27ae60','#7f8c8d','#e91e63'
+];
+
+function openJackpotWheel(winningHorse) {
+  // 從 state.users 取非管理者玩家名稱
+  var players = [];
+  if (state && state.users) {
+    state.users.forEach(function(u) {
+      if (u.role !== 'admin' && u.name) players.push(u.name);
+    });
+  }
+  if (players.length === 0) players = ['玩家'];
+
+  JP.players  = players;
+  JP.colors   = players.map(function(_, i) { return JP_COLORS[i % JP_COLORS.length]; });
+  JP.angle    = 0;
+  JP.vel      = 0;
+  JP.isSpinning = false;
+  JP.winningHorse = winningHorse;
+
+  document.getElementById('jp-result').textContent = '';
+  document.getElementById('jp-close-btn').style.display  = 'none';
+  document.getElementById('jp-spin-btn').style.display   = 'none';
+  document.getElementById('jp-spin-hint').style.display  = 'block';
+  document.getElementById('jp-overlay').classList.add('open');
+
+  jpDrawWheel();
+  // 自動開始旋轉
+  setTimeout(jpSpin, 500);
+}
+
+function jpDrawWheel() {
+  var canvas = document.getElementById('jp-canvas');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var n = JP.players.length;
+  if (n === 0) return;
+  var sliceDeg = 360 / n;
+  var cx = canvas.width / 2, cy = canvas.height / 2;
+  var r  = canvas.width / 2 - 3;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (var i = 0; i < n; i++) {
+    var startRad = (JP.angle + i * sliceDeg - 90) * Math.PI / 180;
+    var endRad   = startRad + sliceDeg * Math.PI / 180;
+
+    // 扇形
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, startRad, endRad);
+    ctx.closePath();
+    ctx.fillStyle = JP.colors[i];
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 玩家名稱文字（橫向書寫，置於扇形中央）
+    var midRad = startRad + (sliceDeg / 2) * Math.PI / 180;
+    var fontSize = Math.max(11, Math.min(18, Math.floor(180 / n)));
+    var textR = r * 0.62;
+    var tx = cx + textR * Math.cos(midRad);
+    var ty = cy + textR * Math.sin(midRad);
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold ' + fontSize + 'px sans-serif';
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur  = 5;
+    ctx.fillText(JP.players[i], 0, 0);
+    ctx.restore();
+  }
+
+  // 中心圓
+  ctx.beginPath();
+  ctx.arc(cx, cy, 22, 0, 2 * Math.PI);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy, 15, 0, 2 * Math.PI);
+  ctx.fillStyle = '#ffd700';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy, 7, 0, 2 * Math.PI);
+  ctx.fillStyle = '#333';
+  ctx.fill();
+}
+
+function jpSpin() {
+  if (JP.isSpinning) return;
+  JP.isSpinning = true;
+  JP.vel = 18 + Math.random() * 12;
+  document.getElementById('jp-result').textContent = '';
+  document.getElementById('jp-close-btn').style.display = 'none';
+  document.getElementById('jp-spin-btn').style.display  = 'none';
+  document.getElementById('jp-spin-hint').style.display = 'none';
+
+  var decel = 0.984 + Math.random() * 0.006; // 0.984 ~ 0.990 → 讓每次停法不同
+  function loop() {
+    JP.angle = (JP.angle + JP.vel) % 360;
+    JP.vel  *= decel;
+    jpDrawWheel();
+    if (JP.vel > 0.25) {
+      JP.animId = requestAnimationFrame(loop);
+    } else {
+      JP.isSpinning = false;
+      jpShowResult();
+    }
+  }
+  JP.animId = requestAnimationFrame(loop);
+}
+
+function jpShowResult() {
+  var n = JP.players.length;
+  var sliceDeg = 360 / n;
+  // 指標在上方 (12 點鐘)。轉盤旋轉 JP.angle 度後，
+  // 指標對應到的未旋轉角度 = (360 - JP.angle%360) % 360
+  var ptrAngle = (360 - JP.angle % 360) % 360;
+  var winIdx   = Math.floor(ptrAngle / sliceDeg) % n;
+  var winner   = JP.players[winIdx];
+
+  document.getElementById('jp-result').textContent = '🎉 ' + winner + ' 獲得總獎金 10%！';
+  document.getElementById('jp-close-btn').style.display  = 'inline-block';
+  document.getElementById('jp-spin-btn').style.display   = 'inline-block';
+  document.getElementById('jp-spin-hint').style.display  = 'none';
+}
+
+function closeJackpotWheel() {
+  cancelAnimationFrame(JP.animId);
+  JP.isSpinning = false;
+  document.getElementById('jp-overlay').classList.remove('open');
+}
+
+// 點擊轉盤可再次旋轉
+document.getElementById('jp-canvas').addEventListener('click', function() {
+  if (!JP.isSpinning) jpSpin();
+});
+</script>
+
+</body>
+</html>                 
