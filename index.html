@@ -64,6 +64,7 @@
   .page { display: none; padding: 0 16px; animation: fadeIn 0.2s ease; }
   .page.active { display: block; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   
   .section-title { font-size: calc(13px * var(--font-multiplier)); font-weight: 600; color: var(--color-text-secondary); margin: 24px 0 12px; display: flex; align-items: center; gap: 8px; }
   
@@ -617,6 +618,16 @@
 </head>
 <body>
 
+<!-- 管理員頁懸浮「回到最上面」按鈕（掛在 body 層，不受容器 overflow 影響） -->
+<button id="admin-back-top-btn"
+  onclick="window.scrollTo({top:0,behavior:'smooth'});document.documentElement.scrollTop=0;document.body.scrollTop=0;var _a=document.getElementById('app');if(_a)_a.scrollTop=0;var _p=document.getElementById('page-admin');if(_p)_p.scrollTop=0;"
+  style="display:none;position:fixed;bottom:86px;right:18px;z-index:9999;width:46px;height:46px;border-radius:50%;background:#2563eb;color:#fff;border:none;box-shadow:0 4px 14px rgba(37,99,235,0.5);cursor:pointer;align-items:center;justify-content:center;opacity:0;transition:opacity 0.25s ease;touch-action:manipulation;"
+  title="回到最上面">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="18 15 12 9 6 15"/>
+  </svg>
+</button>
+
 <div class="app" id="app">
   <div id="login-view"></div>
   <div id="main-view" style="display:none">
@@ -726,7 +737,13 @@
       <span style="color:#fff;font-size:12px;font-weight:700;letter-spacing:1px;">LIVE</span>
     </div>
     <div style="display:flex;gap:4px;">
-      <button onclick="_toggleStreamMax()" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:17px;line-height:1;padding:2px 5px;" title="最大化">⛶</button>
+      <button onclick="_toggleStreamMax()" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:17px;line-height:1;padding:2px 5px;" title="展開">⛶</button>
+      <button id="stream-fs-btn" onclick="_toggleStreamFullscreen()" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:16px;line-height:1;padding:2px 5px;" title="全螢幕">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+          <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+        </svg>
+      </button>
       <button onclick="_closeStreamOverlay()" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:20px;line-height:1;padding:2px 5px;" title="最小化">−</button>
     </div>
   </div>
@@ -883,10 +900,11 @@ function _toArray(val) {
 
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.database();
-const STATE_REF    = db.ref('hrapp');
-const SETTINGS_REF = db.ref('hrapp_settings'); // 全域設定（不被 clearAllData 清除）
-const STREAM_REF    = db.ref('hrapp_stream');    // WebRTC 信令節點
-const SESSIONS_REF  = db.ref('hrapp_sessions'); // 線上登入狀態（裝置斷線自動清除）
+const STATE_REF      = db.ref('hrapp');
+const SETTINGS_REF   = db.ref('hrapp_settings');   // 全域設定（不被 clearAllData 清除）
+const STREAM_REF     = db.ref('hrapp_stream');      // WebRTC 信令節點
+const SESSIONS_REF   = db.ref('hrapp_sessions');   // 線上登入狀態（裝置斷線自動清除）
+const JP_WINNERS_REF = db.ref('hrapp_jp_winners'); // JP 得獎記錄（跨裝置同步）
 
 let _activeSessions = {}; // { userId: true } — 目前已登入裝置的玩家
 
@@ -968,54 +986,60 @@ function setBroadcastZoom(val) {
   track.applyConstraints({ advanced: [{ zoom: parseFloat(val) }] }).catch(() => {});
 }
 
+// ── 直播端：共用串流啟動邏輯（避免重複代碼）──
+async function _startBroadcastWithStream(stream, toastMsg) {
+  _localStream = stream;
+  _isBroadcasting = true;
+  const preview = document.getElementById('broadcast-preview');
+  if (preview) { preview.srcObject = stream; preview.style.display = 'block'; }
+
+  await STREAM_REF.set({ status: 'live', viewers: null, offers: null, answers: null,
+    bc_candidates: null, viewer_candidates: null });
+
+  // 監聽新觀看者加入
+  STREAM_REF.child('viewers').on('child_added', async snap => {
+    const vid = snap.key;
+    if (_peerConns[vid]) return;
+    const pc = new RTCPeerConnection(_ICE_CFG);
+    _peerConns[vid] = pc;
+    _localStream.getTracks().forEach(t => pc.addTrack(t, _localStream));
+    pc.onicecandidate = e => {
+      if (e.candidate) STREAM_REF.child('bc_candidates/' + vid).push(e.candidate.toJSON());
+    };
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    STREAM_REF.child('offers/' + vid).set({ sdp: offer.sdp, type: offer.type });
+    STREAM_REF.child('answers/' + vid).on('value', async s2 => {
+      const a = s2.val();
+      if (a && !pc.remoteDescription) await pc.setRemoteDescription(new RTCSessionDescription(a));
+    });
+    STREAM_REF.child('viewer_candidates/' + vid).on('child_added', s3 => {
+      const c = s3.val();
+      if (c) pc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
+    });
+  });
+
+  // 監聽觀看者離開
+  STREAM_REF.child('viewers').on('child_removed', snap => {
+    const vid = snap.key;
+    if (_peerConns[vid]) { _peerConns[vid].close(); delete _peerConns[vid]; }
+  });
+
+  toast(toastMsg || '📹 直播已開始！其他裝置會自動收到畫面');
+  const activeTab = document.querySelector('.tab.active');
+  if (activeTab?.dataset.tab === 'admin') { renderAdmin(); _syncBroadcastPreview(); }
+}
+
 // ── 直播端：開始直播 ──
 async function startBroadcast() {
   if (_isBroadcasting) { toast('直播已在進行中'); return; }
   try {
     // 優先使用後置鏡頭（ideal 不強制，無後鏡頭時自動 fallback）
-    _localStream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' } },
       audio: true
     });
-    _isBroadcasting = true;
-    const preview = document.getElementById('broadcast-preview');
-    if (preview) { preview.srcObject = _localStream; preview.style.display = 'block'; }
-
-    await STREAM_REF.set({ status: 'live', viewers: null, offers: null, answers: null,
-      bc_candidates: null, viewer_candidates: null });
-
-    // 監聽新觀看者加入
-    STREAM_REF.child('viewers').on('child_added', async snap => {
-      const vid = snap.key;
-      if (_peerConns[vid]) return;
-      const pc = new RTCPeerConnection(_ICE_CFG);
-      _peerConns[vid] = pc;
-      _localStream.getTracks().forEach(t => pc.addTrack(t, _localStream));
-      pc.onicecandidate = e => {
-        if (e.candidate) STREAM_REF.child('bc_candidates/' + vid).push(e.candidate.toJSON());
-      };
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      STREAM_REF.child('offers/' + vid).set({ sdp: offer.sdp, type: offer.type });
-      STREAM_REF.child('answers/' + vid).on('value', async s2 => {
-        const a = s2.val();
-        if (a && !pc.remoteDescription) await pc.setRemoteDescription(new RTCSessionDescription(a));
-      });
-      STREAM_REF.child('viewer_candidates/' + vid).on('child_added', s3 => {
-        const c = s3.val();
-        if (c) pc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
-      });
-    });
-
-    // 監聽觀看者離開
-    STREAM_REF.child('viewers').on('child_removed', snap => {
-      const vid = snap.key;
-      if (_peerConns[vid]) { _peerConns[vid].close(); delete _peerConns[vid]; }
-    });
-
-    toast('📹 直播已開始！其他裝置會自動收到畫面');
-    const activeTab = document.querySelector('.tab.active');
-    if (activeTab?.dataset.tab === 'admin') { renderAdmin(); _syncBroadcastPreview(); }
+    await _startBroadcastWithStream(stream, '📹 直播已開始！其他裝置會自動收到畫面');
   } catch (err) {
     _isBroadcasting = false;
     const name = err.name || '';
@@ -1027,20 +1051,12 @@ async function startBroadcast() {
     } else if (name === 'NotSupportedError' || name === 'NotReadableError') {
       msg = '❌ 瀏覽器不支援相機存取\n\n請改用 Safari（iOS）或 Chrome（Android）開啟，並確認網址為 https://';
     } else if (name === 'OverconstrainedError') {
-      msg = '❌ 相機設定不符合，嘗試放寬條件中...';
-      // 降級嘗試：只要視訊，不指定任何限制
+      // 降級嘗試：放寬條件，只要視訊，不指定音訊
       try {
-        _localStream = await navigator.mediaDevices.getUserMedia({
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' } }, audio: false
         });
-        _isBroadcasting = true;
-        const preview = document.getElementById('broadcast-preview');
-        if (preview) { preview.srcObject = _localStream; preview.style.display = 'block'; }
-        await STREAM_REF.set({ status: 'live' });
-        STREAM_REF.child('viewers').on('child_added', async snap => { /* 同上邏輯 */ });
-        toast('📹 直播已開始（僅視訊，無音訊）');
-        const activeTab = document.querySelector('.tab.active');
-        if (activeTab?.dataset.tab === 'admin') { renderAdmin(); _syncBroadcastPreview(); }
+        await _startBroadcastWithStream(fallbackStream, '📹 直播已開始（僅視訊，無音訊）');
         return;
       } catch(e2) { msg = '❌ 相機完全無法存取：' + (e2.message || e2); }
     } else {
@@ -1125,6 +1141,47 @@ function _toggleStreamMax() {
   if (ov) ov.classList.toggle('maximized');
 }
 
+function _toggleStreamFullscreen() {
+  const v = document.getElementById('stream-video');
+  if (!v) return;
+
+  // 已在全螢幕 → 離開
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+  if (fsEl) {
+    (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
+    return;
+  }
+
+  // iOS Safari：video 元素直接支援 webkitEnterFullscreen
+  if (v.webkitEnterFullscreen) {
+    v.webkitEnterFullscreen();
+    return;
+  }
+
+  // Android / 桌面：優先對 video 元素全螢幕，fallback 對 overlay
+  const target = v.requestFullscreen ? v : document.getElementById('stream-overlay');
+  if (target && target.requestFullscreen) {
+    target.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+  } else if (target && target.webkitRequestFullscreen) {
+    target.webkitRequestFullscreen();
+  }
+}
+
+// 全螢幕狀態改變時，更新按鈕圖示
+(function _initFsListener() {
+  var exitIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>';
+  var enterIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+  function onFsChange() {
+    var btn = document.getElementById('stream-fs-btn');
+    if (!btn) return;
+    var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    btn.innerHTML = isFs ? exitIcon : enterIcon;
+    btn.title = isFs ? '退出全螢幕' : '全螢幕';
+  }
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+})();
+
 // ── 監聽全域直播狀態 ──
 STREAM_REF.child('status').on('value', snap => {
   const isLive = snap.val() === 'live';
@@ -1177,6 +1234,14 @@ function save() {
     requirePassword: state.requirePassword !== false
   }).catch(err => console.error('Firebase 儲存失敗:', err));
   try { localStorage.setItem('hrapp_local', JSON.stringify({currentUser: state.currentUser, pendingBets: state.pendingBets||[]})); } catch(e) {}
+}
+
+// 局部更新：只寫入有變動的欄位，減少 Firebase 傳輸量
+// 例：savePartial({ races: state.races }) 只覆寫 races 路徑
+function savePartial(fields) {
+  const promise = STATE_REF.update(fields).catch(err => console.error('Firebase 局部儲存失敗:', err));
+  try { localStorage.setItem('hrapp_local', JSON.stringify({currentUser: state.currentUser, pendingBets: state.pendingBets||[]})); } catch(e) {}
+  return promise;
 }
 
 function savePending() {
@@ -1248,14 +1313,14 @@ function renderLogin() {
             <div style="width:32px;height:32px;border-radius:50%;background:${COLORS[p.color%COLORS.length]};color:${TEXT_COLORS[p.color%TEXT_COLORS.length]};display:flex;align-items:center;justify-content:center;font-size:calc(14px * var(--font-multiplier));font-weight:700;flex-shrink:0;">${p.name[0]}</div>
             <div class="info">
               <div class="name">${p.name} <span style="font-size:calc(11px * var(--font-multiplier));color:#16a34a;font-weight:600;background:#dcfce7;padding:2px 7px;border-radius:20px;margin-left:4px;">● 已登入</span></div>
-              <div class="role">餘額：${p.points} pts</div>
+              <div class="role" style="color:#9ca3af;">使用中</div>
             </div>
           </div>`
         : `<button class="user-btn" onclick="login('${p.id}')" style="padding:10px 14px;">
             <div style="width:32px;height:32px;border-radius:50%;background:${COLORS[p.color%COLORS.length]};color:${TEXT_COLORS[p.color%TEXT_COLORS.length]};display:flex;align-items:center;justify-content:center;font-size:calc(14px * var(--font-multiplier));font-weight:700;flex-shrink:0;">${p.name[0]}</div>
             <div class="info">
               <div class="name">${p.name}</div>
-              <div class="role">餘額：${p.points} pts</div>
+              <div class="role" style="color:#9ca3af;">○ 空閒</div>
             </div>
           </button>`;
     }).join('');
@@ -1280,8 +1345,8 @@ function renderLogin() {
       ${orphans.map(p => {
         const online = !!_activeSessions[p.id];
         return online
-          ? `<div class="user-btn" style="opacity:0.55;cursor:not-allowed;background:#f3f4f6;">${avatar(p)}<div class="info"><div class="name">${p.name} <span style="font-size:calc(11px*var(--font-multiplier));color:#16a34a;font-weight:600;background:#dcfce7;padding:2px 7px;border-radius:20px;margin-left:4px;">● 已登入</span></div><div class="role">餘額：${p.points} pts</div></div></div>`
-          : `<button class="user-btn" onclick="login('${p.id}')">${avatar(p)}<div class="info"><div class="name">${p.name}</div><div class="role">餘額：${p.points} pts</div></div></button>`;
+          ? `<div class="user-btn" style="opacity:0.55;cursor:not-allowed;background:#f3f4f6;">${avatar(p)}<div class="info"><div class="name">${p.name} <span style="font-size:calc(11px*var(--font-multiplier));color:#16a34a;font-weight:600;background:#dcfce7;padding:2px 7px;border-radius:20px;margin-left:4px;">● 已登入</span></div><div class="role" style="color:#9ca3af;">使用中</div></div></div>`
+          : `<button class="user-btn" onclick="login('${p.id}')">${avatar(p)}<div class="info"><div class="name">${p.name}</div><div class="role" style="color:#9ca3af;">○ 空閒</div></div></button>`;
       }).join('')}
     </div>` : '';
 
@@ -1396,7 +1461,61 @@ function logout() {
 
 function getUser() { return state.users.find(u=>u.id===state.currentUser); }
 
+// ── 管理員頁懸浮「回到最上面」按鈕控制 ──
+var _adminBackTopScrollHandler = null;
+function _ensureAdminBackTopBtn() {
+  var btn = document.getElementById('admin-back-top-btn');
+  if (!btn) return;
+
+  // 移除舊監聽器
+  if (_adminBackTopScrollHandler) {
+    window.removeEventListener('scroll', _adminBackTopScrollHandler, true);
+    document.removeEventListener('scroll', _adminBackTopScrollHandler, true);
+    _adminBackTopScrollHandler = null;
+  }
+
+  // 顯示按鈕容器（flex）
+  btn.style.display = 'flex';
+
+  var update = function() {
+    var top = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    // 備援：掃描所有可能正在捲動的容器
+    if (top === 0) {
+      var els = [document.getElementById('app'), document.getElementById('page-admin'), document.documentElement, document.body];
+      for (var i = 0; i < els.length; i++) {
+        if (els[i] && els[i].scrollTop > 0) { top = els[i].scrollTop; break; }
+      }
+    }
+    if (top > 60) {
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+    } else {
+      btn.style.opacity = '0';
+      btn.style.pointerEvents = 'none';
+    }
+  };
+
+  _adminBackTopScrollHandler = update;
+  // 捕獲階段監聽，能抓到任何子元素的 scroll 事件
+  window.addEventListener('scroll', update, { passive: true, capture: true });
+  document.addEventListener('scroll', update, { passive: true, capture: true });
+  update(); // 初始檢查
+}
+
+function _hideAdminBackTopBtn() {
+  var btn = document.getElementById('admin-back-top-btn');
+  if (!btn) return;
+  btn.style.display = 'none';
+  btn.style.opacity = '0';
+  if (_adminBackTopScrollHandler) {
+    window.removeEventListener('scroll', _adminBackTopScrollHandler, true);
+    document.removeEventListener('scroll', _adminBackTopScrollHandler, true);
+    _adminBackTopScrollHandler = null;
+  }
+}
+
 function renderPage(tab) {
+  if(tab !== 'admin') _hideAdminBackTopBtn();
   if(tab==='races') renderRaces();
   if(tab==='slip') renderSlip();
   if(tab==='board') renderBoard();
@@ -1430,7 +1549,7 @@ function renderRaces() {
         <div style="font-size:calc(13px * var(--font-multiplier));color:#92400e;font-weight:600;">📝 待送出（${_pendingCount} 注）</div>
         <div style="font-size:calc(12px * var(--font-multiplier));color:#d97706;margin-top:2px;">預留 ${_pendingTotal} pts，送出前可修改</div>
       </div>
-      <button onclick="submitAllBets()" style="background:#d97706;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:calc(14px * var(--font-multiplier));font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">送出 →</button>
+      <button onclick="submitAllBets(this)" style="background:#d97706;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:calc(14px * var(--font-multiplier));font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">送出 →</button>
     </div>` : '';
 
   el.innerHTML = `
@@ -1536,6 +1655,32 @@ function raceCard(race) {
   const resultBanner = race.status==='finished'&&race.result
     ? `<div style="background:#f0fdf4;border-radius:10px;padding:10px 14px;margin-top:12px;font-size:calc(14px * var(--font-multiplier));">🏆 ${race.horses.find(h=>h.id===race.result.first)?.name} &nbsp;🥈 ${race.horses.find(h=>h.id===race.result.second)?.name}</div>` : '';
 
+  // ── 已確認下注清單（開放期才顯示取消按鈕）──
+  const lockedSection = myLocked.length ? (()=>{
+    const canCancel = race.status === 'open';
+    const rows = myLocked.map(b => {
+      const h1 = race.horses.find(h=>h.id===b.horseId);
+      const h2 = b.horseId2 ? race.horses.find(h=>h.id===b.horseId2) : null;
+      const desc = b.type==='quinella'
+        ? `🔗 ${h1?.name||'?'} ＋ ${h2?.name||'?'}`
+        : `🏆 ${h1?.name||'?'}`;
+      const cancelBtn = canCancel
+        ? `<button onclick="cancelBet('${b.id}')" style="padding:5px 12px;border:1px solid #fca5a5;background:#fff5f5;color:#dc2626;border-radius:6px;font-size:calc(11px * var(--font-multiplier));cursor:pointer;white-space:nowrap;flex-shrink:0;touch-action:manipulation;">取消</button>`
+        : '';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f3f4f6;gap:8px;">
+        <div style="flex:1;min-width:0;">
+          <span style="font-size:calc(12px * var(--font-multiplier));font-weight:600;color:var(--color-text-primary);">${desc}</span>
+          <span style="font-size:calc(11px * var(--font-multiplier));color:var(--color-text-secondary);margin-left:6px;">${b.amount} pts · ${b.odds}x</span>
+        </div>
+        ${cancelBtn}
+      </div>`;
+    }).join('');
+    return `<div style="margin-top:10px;padding:10px 12px;background:#f8faff;border:1px solid #dbeafe;border-radius:10px;">
+      <div style="font-size:calc(11px * var(--font-multiplier));font-weight:700;color:#2563eb;margin-bottom:4px;">🔒 已確認下注${canCancel?' （開放期可取消）':''}</div>
+      ${rows}
+    </div>`;
+  })() : '';
+
   // ─────────────────────────────── DUMMY marker to replace old code ──
   const _PLAYER_VIEW_MARKER_ = true;
   return `<div class="race-card" style="box-shadow:0 4px 12px rgba(0,0,0,0.05);border:none;padding:14px;">
@@ -1559,6 +1704,7 @@ function raceCard(race) {
       </div><!-- /content z-index:2 -->
     </div><!-- /bg wrapper -->
     ${resultBanner}
+    ${lockedSection}
   </div>`;
 }
 
@@ -2009,7 +2155,7 @@ function renderSlip() {
         <div style="font-size:calc(14px * var(--font-multiplier));font-weight:700;color:#92400e;">📝 待送出 ${myPending.length} 注，共 ${pendingTotal} pts</div>
         <div style="font-size:calc(12px * var(--font-multiplier));color:#d97706;margin-top:2px;">按「送出」鎖定，按 × 可移除</div>
       </div>
-      <button onclick="submitAllBets()" style="background:#d97706;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:calc(14px * var(--font-multiplier));font-weight:700;cursor:pointer;">送出 →</button>
+      <button onclick="submitAllBets(this)" style="background:#d97706;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:calc(14px * var(--font-multiplier));font-weight:700;cursor:pointer;">送出 →</button>
     </div>
     ${pendingSlipsHtml}
   ` : '';
@@ -2140,7 +2286,7 @@ function renderHistory() {
     ${myBets.map((bet, i)=>{
       const race = state.races.find(r=>r.id===bet.raceId)||{name:'未知'};
       const horse = (race.horses||[]).find(h=>h.id===bet.horseId)||{name:'未知'};
-      const typeLabel = bet.type==='win'?'獨贏':'位置';
+      const typeLabel = bet.type==='win'?'獨贏':'連贏';
       const change = bet.won ? bet.payout : -bet.amount;
       return `<div class="history-row" style="${i===myBets.length-1?'border:none;':''}">
         <div class="history-meta">${race.name} · ${typeLabel}</div>
@@ -2206,9 +2352,18 @@ function renderAdmin() {
   }).join('');
 
   el.innerHTML = `
-    <div style="display:flex;justify-content:flex-end;gap:10px;padding:12px 0 4px;">
-      <button onclick="openWheel()" style="padding:8px 20px;background:#f5f3ff;color:#7c3aed;border:1px solid #c4b5fd;border-radius:var(--border-radius-sm);font-size:calc(13px * var(--font-multiplier));font-weight:600;cursor:pointer;">🎡 轉盤</button>
-      <button onclick="logout()" style="padding:8px 20px;background:var(--color-background-secondary);color:var(--color-text-secondary);border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-sm);font-size:calc(13px * var(--font-multiplier));font-weight:600;cursor:pointer;">🚪 登出</button>
+    <!-- 快速跳轉導覽列 -->
+    <div style="display:flex;flex-wrap:wrap;gap:6px;padding:12px 0 8px;border-bottom:1px solid var(--color-border-tertiary);margin-bottom:4px;">
+      <a href="#admin-sec-bets-anchor"    style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#374151;text-decoration:none;font-weight:600;">📊 下注概況</a>
+      <a href="#admin-sec-horses-anchor"  style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#374151;text-decoration:none;font-weight:600;">🐎 馬匹設定</a>
+      <a href="#admin-broadcast-anchor"   style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#374151;text-decoration:none;font-weight:600;">📹 直播</a>
+      <a href="#admin-create-race-anchor" style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#374151;text-decoration:none;font-weight:600;">➕ 建立賽事</a>
+      <a href="#admin-settle-anchor"      style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#374151;text-decoration:none;font-weight:600;">📢 結果公布</a>
+      <a href="#admin-danger-anchor"      style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#fee2e2;border-radius:20px;color:#dc2626;text-decoration:none;font-weight:600;">🗑️ 危險區域</a>
+      <div style="flex:1;display:flex;justify-content:flex-end;gap:8px;align-items:center;">
+        <button onclick="openWheel()" style="padding:6px 14px;background:#f5f3ff;color:#7c3aed;border:1px solid #c4b5fd;border-radius:var(--border-radius-sm);font-size:calc(12px * var(--font-multiplier));font-weight:600;cursor:pointer;">🎡 轉盤</button>
+        <button onclick="logout()" style="padding:6px 14px;background:var(--color-background-secondary);color:var(--color-text-secondary);border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-sm);font-size:calc(12px * var(--font-multiplier));font-weight:600;cursor:pointer;">🚪 登出</button>
+      </div>
     </div>
 
     <!-- 系統設定 -->
@@ -2247,13 +2402,13 @@ function renderAdmin() {
     </div>
 
     <!-- 📊 隊伍下注概況（可收放）-->
-    <div class="admin-card" style="margin-top:8px;">
+    <div id="admin-sec-bets-anchor" class="admin-card" style="margin-top:8px;">
       ${adminSectionHeader('bets','📊','隊伍下注概況（目前賽事）')}
       ${adminSectionBody('bets', playerBetsOverviewHtml)}
     </div>
 
     <!-- 🐎 馬匹名稱及賠率（可收放，全域設定）-->
-    <div class="admin-card" style="margin-top:8px;">
+    <div id="admin-sec-horses-anchor" class="admin-card" style="margin-top:8px;">
       ${adminSectionHeader('horses','🐎','馬匹名稱及賠率（全域設定）','color:#92400e;')}
       ${adminSectionBody('horses', `
         <p style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:10px;line-height:1.5;">
@@ -2286,7 +2441,7 @@ function renderAdmin() {
     </div>
 
     <!-- 📹 直播控制 -->
-    <p class="section-title">📹 直播控制</p>
+    <p id="admin-broadcast-anchor" class="section-title">📹 直播控制</p>
     <div class="admin-card">
       ${_isBroadcasting ? `
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
@@ -2316,7 +2471,7 @@ function renderAdmin() {
     </div>
 
     <!-- ➕ 建立多場賽事 -->
-    <p class="section-title">➕ 建立新賽事</p>
+    <p id="admin-create-race-anchor" class="section-title">➕ 建立新賽事</p>
     <div class="admin-card">
       <div class="form-row">
         <label>賽事名稱前綴</label>
@@ -2336,7 +2491,7 @@ function renderAdmin() {
     </div>
 
     <!-- 危險區域 -->
-    <p class="section-title" style="color:#dc2626;">🗑️ 危險區域</p>
+    <p id="admin-danger-anchor" class="section-title" style="color:#dc2626;">🗑️ 危險區域</p>
     <div class="admin-card" style="border-color:#fca5a5;background:#fff5f5;margin-bottom:10px;">
       <div style="font-size:calc(14px * var(--font-multiplier));font-weight:600;color:#dc2626;margin-bottom:8px;">清除所有組別與玩家</div>
       <div style="font-size:calc(13px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:14px;line-height:1.5;">
@@ -2355,7 +2510,7 @@ function renderAdmin() {
     </div>
 
     <!-- 📢 狀態控制與結果公布 -->
-    <p class="section-title">📢 狀態控制與結果公布</p>
+    <p id="admin-settle-anchor" class="section-title">📢 狀態控制與結果公布</p>
     ${state.races.filter(r=>r.status!=='finished').map(r=>`
       <div class="admin-card">
         <h3 style="font-size:calc(16px * var(--font-multiplier));font-weight:600;margin-bottom:16px;border-bottom:1px solid var(--color-border-tertiary);padding-bottom:10px;">${r.name}</h3>
@@ -2435,11 +2590,13 @@ function renderAdmin() {
   `;
   // 直播進行中時，重新渲染後重新附加攝影機串流到預覽元素
   _syncBroadcastPreview();
+  // 確保懸浮按鈕存在並啟用
+  _ensureAdminBackTopBtn();
 }
 
 function setActiveRace(id) {
   state.activeRaceId = id;
-  save();
+  savePartial({ activeRaceId: id });
   toast('已更新隊伍可見賽事！');
   renderAdmin(); // 更新隊伍概況區域
 }
@@ -2474,9 +2631,11 @@ function createRace() {
     });
   });
 
-  state.races.push({ id: raceId, name, time, status: 'open', horses: raceHorses, quinellaOdds: raceQ, result: null });
+  const newRace = { id: raceId, name, time, status: 'open', horses: raceHorses, quinellaOdds: raceQ, result: null };
+  state.races.push(newRace);
   state.activeRaceId = raceId;
   save();
+  _autoCloseRace(newRace); // 排程精確自動截止
   toast('✅ 已建立賽事！');
   renderAdmin();
 }
@@ -2529,9 +2688,11 @@ function createNextRace(sourceRaceId) {
   saveDefaultHorses();
   saveDefaultQuinella();
 
-  state.races.push({ id: raceId, name, time, status: 'open', horses: raceHorses, quinellaOdds: raceQ, result: null });
+  const nextRace = { id: raceId, name, time, status: 'open', horses: raceHorses, quinellaOdds: raceQ, result: null };
+  state.races.push(nextRace);
   state.activeRaceId = raceId;
   save();
+  _autoCloseRace(nextRace); // 排程精確自動截止
   toast('✅ 下一場已建立，賠率已依前場名次調整！');
   renderAdmin();
 }
@@ -2570,7 +2731,7 @@ function updateDefaultQuinellaFromHorse() {
 
 function updateRaceStatus(raceId, status) {
   const race = state.races.find(r=>r.id===raceId);
-  if(race) { race.status=status; save(); toast('狀態已更新'); }
+  if(race) { race.status=status; savePartial({ races: state.races }); toast('狀態已更新'); }
 }
 
 // 級聯下拉：已選馬匹從後續名次移除
@@ -2592,8 +2753,13 @@ function syncResultDropdowns(raceId, n) {
   }
 }
 
+// 防止管理員快速連點「公布結果」造成重複結算
+const _settlingRaces = new Set();
+
 function settleRace(raceId) {
+  if (_settlingRaces.has(raceId)) { toast('⚠️ 結算進行中，請稍候...'); return; }
   if(!confirm('結算後無法更改，確定要公布結果嗎？')) return;
+  _settlingRaces.add(raceId);
 
   const race = state.races.find(r=>r.id===raceId);
   const n = race.horses.length;
@@ -2635,6 +2801,7 @@ function settleRace(raceId) {
     ? `🌈 彩虹馬加成：${rainbow1?'冠軍':''}${rainbow1&&rainbow2?'+':''}${rainbow2?'亞軍':''} ×${(rainbow1?2:1)*(rainbow2?2:1)}`
     : '';
   save();
+  _settlingRaces.delete(raceId); // 結算完成，解除鎖定
   const rankedCount = positions.filter(v=>v).length;
   toast('✅ 結果已公布，彩金已發放！' + (rainbowMsg?' '+rainbowMsg:'') + `（已記錄 ${rankedCount} 匹馬名次）`);
   renderAdmin();
@@ -2691,9 +2858,12 @@ function cancelBet(id) {
   const user = getUser();
   user.points += bet.amount;
   state.bets = state.bets.filter(b=>b.id!==id);
-  save();
+  savePartial({ bets: state.bets, users: state.users });
   toast('✅ 下注已取消，點數已退回');
-  renderSlip();
+  // 同時刷新賽事頁（避免已取消的注仍顯示在賽事卡的已確認區塊）
+  const _activeTabAfterCancel = document.querySelector('.tab.active');
+  if (_activeTabAfterCancel) renderPage(_activeTabAfterCancel.dataset.tab);
+  else renderSlip();
 }
 
 function removePendingBet(id) {
@@ -2705,7 +2875,7 @@ function removePendingBet(id) {
   if(activeTab) renderPage(activeTab.dataset.tab);
 }
 
-function submitAllBets() {
+async function submitAllBets(btnEl) {
   const user = getUser();
   const pending = (state.pendingBets||[]).filter(b=>b.userId===state.currentUser);
   if(!pending.length) { toast('沒有待送出的下注'); return; }
@@ -2725,6 +2895,14 @@ function submitAllBets() {
     if(conflict) { toast(`已有相同下注，請先查看投注單`); return; }
   }
 
+  // 按鈕 loading 狀態
+  if(btnEl) {
+    btnEl.disabled = true;
+    btnEl.style.background = '#9ca3af';
+    btnEl.style.cursor = 'not-allowed';
+    btnEl.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 0.8s linear infinite;flex-shrink:0;"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>送出中…</span>';
+  }
+
   // 寫入 bets，扣除點數
   pending.forEach(pb=>{
     const betObj = {id:'b'+Date.now()+'_'+Math.random().toString(36).slice(2,7),userId:state.currentUser,raceId:pb.raceId,horseId:pb.horseId,type:pb.type,amount:pb.amount,odds:pb.odds,settled:false,won:false,payout:0};
@@ -2735,10 +2913,23 @@ function submitAllBets() {
 
   // 清空待送出清單
   state.pendingBets = (state.pendingBets||[]).filter(b=>b.userId!==state.currentUser);
-  save();
-  toast(`✅ 已送出 ${pending.length} 筆下注！`);
-  const activeTab = document.querySelector('.tab.active');
-  if(activeTab) renderPage(activeTab.dataset.tab);
+
+  try {
+    await savePartial({ bets: state.bets, users: state.users });
+    toast(`✅ 已送出 ${pending.length} 筆下注！`);
+    const activeTab = document.querySelector('.tab.active');
+    if(activeTab) renderPage(activeTab.dataset.tab);
+  } catch(err) {
+    // Firebase 寫入失敗：回滾並恢復按鈕
+    console.error('下注送出失敗:', err);
+    toast('❌ 送出失敗，請重試');
+    if(btnEl) {
+      btnEl.disabled = false;
+      btnEl.style.background = '#d97706';
+      btnEl.style.cursor = 'pointer';
+      btnEl.innerHTML = '送出 →';
+    }
+  }
 }
 
 // ── 初始化連贏賠率（公式預設值）──
@@ -2970,7 +3161,7 @@ function adminRenameTeam(teamId) {
   if (!name) { toast('請輸入組別名稱'); return; }
   if (state.teams.find(t => t.name === name && t.id !== teamId)) { toast('此組別名稱已存在'); return; }
   const team = state.teams.find(t => t.id === teamId);
-  if (team) { team.name = name; save(); toast('✅ 已更新組別名稱'); renderTeamSettings(); }
+  if (team) { team.name = name; savePartial({ teams: state.teams }); toast('✅ 已更新組別名稱'); renderTeamSettings(); }
 }
 
 function adminRenamePlayer(userId) {
@@ -2979,7 +3170,7 @@ function adminRenamePlayer(userId) {
   const name = inp.value.trim();
   if (!name) { toast('請輸入玩家名稱'); return; }
   const user = state.users.find(u => u.id === userId);
-  if (user) { user.name = name; save(); toast('✅ 已更新玩家名稱'); renderTeamSettings(); }
+  if (user) { user.name = name; savePartial({ users: state.users }); toast('✅ 已更新玩家名稱'); renderTeamSettings(); }
 }
 
 function adminSetPlayerPoints(userId) {
@@ -2988,7 +3179,7 @@ function adminSetPlayerPoints(userId) {
   const pts = parseInt(inp.value);
   if (isNaN(pts) || pts < 0) { toast('請輸入有效積分（≥ 0）'); return; }
   const user = state.users.find(u => u.id === userId);
-  if (user) { user.points = pts; save(); toast(`✅ 已更新「${user.name}」積分`); renderTeamSettings(); }
+  if (user) { user.points = pts; savePartial({ users: state.users }); toast(`✅ 已更新「${user.name}」積分`); renderTeamSettings(); }
 }
 
 function adminResetTeamPoints(teamId) {
@@ -2998,14 +3189,14 @@ function adminResetTeamPoints(teamId) {
   const dp = getDefaultPoints();
   if (!confirm(`確定要將「${team.name}」所有玩家積分重置為 ${dp}？`)) return;
   state.users.filter(u => u.teamId === teamId).forEach(u => { u.points = dp; });
-  save();
+  savePartial({ users: state.users });
   toast(`✅ 已重置「${team.name}」所有玩家積分`);
   renderTeamSettings();
 }
 
 function toggleRequirePassword() {
   state.requirePassword = state.requirePassword === false ? true : false;
-  save();
+  savePartial({ requirePassword: state.requirePassword });
   toast(state.requirePassword ? '🔒 密碼保護已開啟' : '🔓 密碼保護已關閉（測試模式）');
   renderAdmin();
 }
@@ -3285,6 +3476,9 @@ STATE_REF.on('value', snapshot => {
     // 套用 UI 縮放（從 localStorage 讀取，預設 2.5x）
     applyFontScale();
 
+    // 排程所有 open 賽事的精確自動截止
+    scheduleAllAutoClose();
+
     // 每次都從登入畫面開始
     renderLogin();
 
@@ -3348,27 +3542,47 @@ STATE_REF.on('value', snapshot => {
     </div>`;
 });
 
-// ── 自動關閉下注通道：每 30 秒檢查一次發車時間 ──
-setInterval(function() {
-  if (!_fbInitialized || !state || !state.races) return;
-  const now = new Date();
-  const hh = String(now.getHours()).padStart(2,'0');
-  const mm = String(now.getMinutes()).padStart(2,'0');
-  const currentTime = hh + ':' + mm;
-  let changed = false;
-  state.races.forEach(function(race) {
-    if (race.status === 'open' && race.time && race.time <= currentTime) {
-      race.status = 'closed';
-      changed = true;
-    }
-  });
-  if (changed) {
-    save();
+// ── 精確自動截止：計算到發車時間的 ms，用 setTimeout 精準觸發 ──
+// 比 setInterval 30秒輪詢更精確，最多延遲 1 秒
+const _autoCloseTimers = {};
+
+function _autoCloseRace(race) {
+  if (!race || race.status !== 'open' || !race.time) return;
+  // 清除舊計時器（避免重複）
+  if (_autoCloseTimers[race.id]) { clearTimeout(_autoCloseTimers[race.id]); delete _autoCloseTimers[race.id]; }
+
+  const [hh, mm] = race.time.split(':').map(Number);
+  const closeAt = new Date(); closeAt.setHours(hh, mm, 0, 0);
+  const msLeft = closeAt - Date.now();
+
+  if (msLeft <= 0) {
+    // 已超過發車時間，立即關閉
+    race.status = 'closed';
+    savePartial({ races: state.races });
     toast('⏰ 已自動關閉截止時間到期的下注通道');
     const activeTab = document.querySelector('.tab.active');
     if (activeTab) renderPage(activeTab.dataset.tab);
+  } else {
+    // 計算精確時間點
+    _autoCloseTimers[race.id] = setTimeout(() => {
+      const r = state.races.find(x => x.id === race.id);
+      if (r && r.status === 'open') {
+        r.status = 'closed';
+        savePartial({ races: state.races });
+        toast('⏰ 已自動關閉截止時間到期的下注通道');
+        const activeTab = document.querySelector('.tab.active');
+        if (activeTab) renderPage(activeTab.dataset.tab);
+      }
+      delete _autoCloseTimers[race.id];
+    }, msLeft);
   }
-}, 30000);
+}
+
+// 為所有 open 賽事排程自動截止（Firebase 載入完成後、建立新賽事後呼叫）
+function scheduleAllAutoClose() {
+  if (!state || !state.races) return;
+  state.races.filter(r => r.status === 'open').forEach(_autoCloseRace);
+}
 
 // ── 收放管理區塊 ──
 function toggleAdminSection(key) {
@@ -3519,12 +3733,30 @@ function adminSectionBody(key, html) {
 
 <script>
 // ── JP 得獎記錄（最早宣告，供 clearAllData 等函數使用）──
+// 初始值從 localStorage 讀（快速顯示），Firebase 載入後會同步覆蓋
 var _jpWinners = (function(){
   try { return JSON.parse(localStorage.getItem('hrapp_jp_winners') || '[]'); } catch(e){ return []; }
 })();
 function _jpSaveWinners() {
   try { localStorage.setItem('hrapp_jp_winners', JSON.stringify(_jpWinners)); } catch(e){}
+  // 同步寫入 Firebase，讓所有裝置即時同步（JP_WINNERS_REF 在主 script 塊宣告）
+  if (typeof JP_WINNERS_REF !== 'undefined') {
+    JP_WINNERS_REF.set(_jpWinners).catch(e => console.warn('JP 記錄 Firebase 儲存失敗', e));
+  }
 }
+
+// 監聽 Firebase JP 記錄，其他裝置新增得獎者時自動更新
+(function _listenJpWinners() {
+  if (typeof JP_WINNERS_REF === 'undefined') { setTimeout(_listenJpWinners, 500); return; }
+  JP_WINNERS_REF.on('value', function(snap) {
+    const data = snap.val();
+    const arr = Array.isArray(data) ? data : (data && typeof data === 'object' ? Object.values(data) : []);
+    _jpWinners.length = 0;
+    arr.forEach(function(w){ _jpWinners.push(w); });
+    try { localStorage.setItem('hrapp_jp_winners', JSON.stringify(_jpWinners)); } catch(e){}
+    _jpRenderList();
+  });
+})();
 function _jpRenderList() {
   var body = document.getElementById('jp-list-body');
   if (!body) return;
