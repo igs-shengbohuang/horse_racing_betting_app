@@ -926,6 +926,46 @@ function _syncBroadcastPreview() {
   if (!_isBroadcasting || !_localStream) return;
   const p = document.getElementById('broadcast-preview');
   if (p && p.srcObject !== _localStream) { p.srcObject = _localStream; }
+  _syncBroadcastZoom();
+}
+
+// ── 縮放滑桿初始化（依裝置能力顯示或隱藏）──
+function _syncBroadcastZoom() {
+  const wrap = document.getElementById('zoom-wrap');
+  if (!wrap || !_localStream) return;
+  const track = _localStream.getVideoTracks()[0];
+  if (!track) return;
+  try {
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps.zoom) {
+      const slider = document.getElementById('zoom-slider');
+      const label  = document.getElementById('zoom-label');
+      if (slider) {
+        slider.min   = caps.zoom.min;
+        slider.max   = caps.zoom.max;
+        slider.step  = caps.zoom.step || 0.1;
+        // 保留上次值，若未設定就用最小值
+        if (!slider.dataset.init) {
+          slider.value = caps.zoom.min;
+          slider.dataset.init = '1';
+        }
+        if (label) label.textContent = parseFloat(slider.value).toFixed(1) + 'x';
+      }
+      wrap.style.display = '';
+    } else {
+      wrap.style.display = 'none';
+    }
+  } catch(e) { wrap.style.display = 'none'; }
+}
+
+// ── 套用縮放值 ──
+function setBroadcastZoom(val) {
+  if (!_localStream) return;
+  const track = _localStream.getVideoTracks()[0];
+  if (!track) return;
+  const label = document.getElementById('zoom-label');
+  if (label) label.textContent = parseFloat(val).toFixed(1) + 'x';
+  track.applyConstraints({ advanced: [{ zoom: parseFloat(val) }] }).catch(() => {});
 }
 
 // ── 直播端：開始直播 ──
@@ -2254,7 +2294,17 @@ function renderAdmin() {
           <span style="font-size:calc(14px * var(--font-multiplier));font-weight:700;color:#ef4444;">直播進行中</span>
           <span style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);margin-left:4px;">觀看者裝置會自動顯示畫面</span>
         </div>
-        <video id="broadcast-preview" autoplay playsinline muted style="width:100%;border-radius:8px;background:#000;max-height:180px;object-fit:cover;display:block;margin-bottom:12px;"></video>
+        <video id="broadcast-preview" autoplay playsinline muted style="width:100%;border-radius:8px;background:#000;max-height:180px;object-fit:cover;display:block;margin-bottom:10px;"></video>
+        <!-- 縮放控制（僅支援的裝置才顯示） -->
+        <div id="zoom-wrap" style="display:none;margin-bottom:12px;background:#f8f8f8;border-radius:8px;padding:10px 14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:calc(12px * var(--font-multiplier));font-weight:600;color:#374151;">🔍 鏡頭縮放</span>
+            <span id="zoom-label" style="font-size:calc(13px * var(--font-multiplier));font-weight:700;color:var(--primary);min-width:36px;text-align:right;">1.0x</span>
+          </div>
+          <input id="zoom-slider" type="range" min="1" max="10" step="0.1" value="1"
+            oninput="setBroadcastZoom(this.value)"
+            style="width:100%;accent-color:var(--primary);cursor:pointer;">
+        </div>
         <button onclick="stopBroadcast()" style="width:100%;padding:12px;background:#ef4444;color:#fff;border:none;border-radius:var(--border-radius-sm);font-size:calc(14px * var(--font-multiplier));font-weight:700;cursor:pointer;">⏹️ 停止直播</button>
       ` : `
         <div style="font-size:calc(13px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:12px;line-height:1.6;">
