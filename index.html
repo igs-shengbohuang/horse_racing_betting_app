@@ -2472,7 +2472,19 @@ function renderAdmin() {
 
     <!-- ➕ 建立多場賽事 -->
     <p id="admin-create-race-anchor" class="section-title">➕ 建立新賽事</p>
-    <div class="admin-card">
+    <div class="admin-card" style="${state.races.length > 0 ? 'opacity:0.5;pointer-events:none;' : ''}">
+      ${state.races.length > 0 ? `
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#f3f4f6;border-radius:8px;margin-bottom:12px;">
+        <span style="font-size:18px;">🔒</span>
+        <div>
+          <div style="font-size:calc(13px * var(--font-multiplier));font-weight:600;color:#374151;">已有進行中的賽事系列</div>
+          <div style="font-size:calc(11px * var(--font-multiplier));color:#6b7280;margin-top:2px;">請從最後一場的「▶ 開啟下一場」按鈕建立後續場次，以確保賠率依名次自動調整。</div>
+        </div>
+      </div>` : `
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:12px;">
+        <span style="font-size:18px;">✅</span>
+        <div style="font-size:calc(12px * var(--font-multiplier));color:#166534;">目前沒有任何賽事，可以建立第一場。</div>
+      </div>`}
       <div class="form-row">
         <label>賽事名稱前綴</label>
         <input type="text" id="new-race-prefix" placeholder="例：挑戰盃 賽馬比賽"
@@ -2487,7 +2499,7 @@ function renderAdmin() {
       <p style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:12px;line-height:1.5;">
         馬匹名稱及賠率將沿用上方「全域設定」的數值；連贏賠率自動依獨贏賠率計算。
       </p>
-      <button class="btn-primary" onclick="createRace()">建立賽事</button>
+      <button class="btn-primary" onclick="createRace()" ${state.races.length > 0 ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>建立賽事</button>
     </div>
 
     <!-- 危險區域 -->
@@ -2603,6 +2615,7 @@ function setActiveRace(id) {
 
 // 建立單場賽事（共用全域馬匹設定）
 function createRace() {
+  if (state.races.length > 0) { toast('⚠️ 已有賽事，請從「▶ 開啟下一場」建立後續場次'); return; }
   const prefix = (document.getElementById('new-race-prefix').value || '').trim();
   if (!prefix) { toast('請輸入賽事名稱前綴'); return; }
   const time = document.getElementById('new-race-time')?.value || '16:00';
