@@ -1202,8 +1202,15 @@ STREAM_REF.child('status').on('value', snap => {
 
 // ─── 文字縮放：每個裝置獨立儲存，預設 2.5x（只縮放文字，不縮放佈局） ──────
 function getFontScale() {
-  const v = parseFloat(localStorage.getItem('hrapp_font_scale'));
-  return (isNaN(v) || v<=0) ? 2.5 : v;
+  const saved = parseFloat(localStorage.getItem('hrapp_font_scale'));
+  if (!isNaN(saved) && saved > 0) return saved;
+  // 未設定過：依裝置寬度給合理預設值
+  // iPhone 15 Pro viewport ≈ 393px，一般手機 < 430px
+  const w = window.innerWidth || screen.width;
+  if (w < 430) return 1.0;       // 手機：正常字體大小
+  if (w < 768) return 1.3;       // 平板小尺寸
+  if (w < 1200) return 1.8;      // 平板大 / 小螢幕電腦
+  return 2.5;                     // 大螢幕 / 投影（原預設）
 }
 function applyFontScale() {
   const s = getFontScale();
@@ -1516,11 +1523,27 @@ function _hideAdminBackTopBtn() {
 
 function renderPage(tab) {
   if(tab !== 'admin') _hideAdminBackTopBtn();
+  // 儲存頁面內所有橫向捲軸位置（避免重繪時歸零）
+  const pageEl = document.getElementById('page-' + tab);
+  const scrollMap = {};
+  if (pageEl) {
+    pageEl.querySelectorAll('[data-scroll-key]').forEach(el => {
+      scrollMap[el.dataset.scrollKey] = el.scrollLeft;
+    });
+  }
   if(tab==='races') renderRaces();
   if(tab==='slip') renderSlip();
   if(tab==='board') renderBoard();
   if(tab==='history') renderHistory();
   if(tab==='admin') renderAdmin();
+  // 還原捲軸位置
+  if (pageEl && Object.keys(scrollMap).length) {
+    pageEl.querySelectorAll('[data-scroll-key]').forEach(el => {
+      if (scrollMap[el.dataset.scrollKey] != null) {
+        el.scrollLeft = scrollMap[el.dataset.scrollKey];
+      }
+    });
+  }
 }
 
 function renderRaces() {
@@ -1570,6 +1593,27 @@ function renderRaces() {
     ${raceHtml}
     ${submitBarHtml}
   `;
+  // 啟動倒數計時顯示（每秒更新一次）
+  _startCountdownDisplay();
+}
+
+// ── 倒數計時顯示（更新賽事卡的倒數文字）──
+var _countdownInterval = null;
+function _startCountdownDisplay() {
+  if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null; }
+  const activeRace = state.races.find(r => r.id === state.activeRaceId);
+  if (!activeRace || activeRace.status !== 'open' || !activeRace.openedAt) return;
+  const closeAt = activeRace.openedAt + AUTO_CLOSE_MINUTES * 60 * 1000;
+  _countdownInterval = setInterval(() => {
+    const el = document.getElementById('countdown-' + activeRace.id);
+    if (!el) { clearInterval(_countdownInterval); _countdownInterval = null; return; }
+    const left = Math.max(0, closeAt - Date.now());
+    const mm = String(Math.floor(left / 60000)).padStart(2, '0');
+    const ss = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
+    el.textContent = left > 0 ? `⏱ 下注截止倒數：${mm}:${ss}` : '⏱ 下注已截止';
+    el.style.color = left < 60000 ? '#dc2626' : left < 120000 ? '#d97706' : '';
+    if (left === 0) { clearInterval(_countdownInterval); _countdownInterval = null; }
+  }, 1000);
 }
 
 function raceCard(race) {
@@ -1685,7 +1729,7 @@ function raceCard(race) {
   const _PLAYER_VIEW_MARKER_ = true;
   return `<div class="race-card" style="box-shadow:0 4px 12px rgba(0,0,0,0.05);border:none;padding:14px;">
     <div class="race-header"><div class="race-name">${race.name}</div><span class="race-status ${statusClass[race.status]}">${statusLabel[race.status]}</span></div>
-    <div class="race-meta" style="margin-bottom:12px;">發車時間：${race.time}</div>
+    ${race.status === 'open' && race.openedAt ? `<div class="race-meta" style="margin-bottom:12px;" id="countdown-${race.id}">⏱ 下注截止倒數：計算中...</div>` : ''}
     <div style="position:relative;border-radius:12px;overflow:hidden;padding:12px 10px 10px;margin-bottom:4px;">
       <!-- 背景圖層 -->
       <div style="position:absolute;inset:0;background-image:url('racing-bg.jpg');background-size:cover;background-position:center;z-index:0;"></div>
@@ -1694,11 +1738,11 @@ function raceCard(race) {
       <!-- 內容層 -->
       <div style="position:relative;z-index:2;">
         <div style="font-size:calc(12px * var(--font-multiplier));font-weight:700;color:#111827;margin-bottom:6px;display:inline-block;background:rgba(255,255,255,0.85);padding:2px 8px;border-radius:6px;">🏆 獨贏（點格下注）</div>
-        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:14px;padding-bottom:4px;">
+        <div data-scroll-key="win-table" style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:14px;padding-bottom:4px;">
           <div style="display:flex;gap:4px;width:max-content;">${winCells}</div>
         </div>
         <div style="font-size:calc(12px * var(--font-multiplier));font-weight:700;color:#111827;margin-bottom:4px;display:inline-block;background:rgba(255,255,255,0.85);padding:2px 8px;border-radius:6px;">🔗 連贏（點格下注）</div>
-        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <div data-scroll-key="quin-table" style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
           <table style="border-collapse:separate;border-spacing:0;width:100%;"><thead><tr>${colH}</tr></thead><tbody>${qRows}</tbody></table>
         </div><!-- /overflow -->
       </div><!-- /content z-index:2 -->
@@ -2492,12 +2536,9 @@ function renderAdmin() {
           oninput="saveDefaultRacePrefix(this.value)">
         <div style="font-size:calc(10px * var(--font-multiplier));color:var(--color-text-tertiary);margin-top:4px;">自動儲存為預設值，場次編號自動計算</div>
       </div>
-      <div class="form-row">
-        <label>發車時間</label>
-        <input type="time" id="new-race-time" value="16:00">
-      </div>
       <p style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:12px;line-height:1.5;">
-        馬匹名稱及賠率將沿用上方「全域設定」的數值；連贏賠率自動依獨贏賠率計算。
+        馬匹名稱及賠率將沿用上方「全域設定」的數值；連贏賠率自動依獨贏賠率計算。<br>
+        <span style="color:#d97706;font-weight:600;">⏱ 建立後將自動倒數 ${AUTO_CLOSE_MINUTES} 分鐘關閉下注（可手動提前關閉）</span>
       </p>
       <button class="btn-primary" onclick="createRace()" ${state.races.length > 0 ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>建立賽事</button>
     </div>
@@ -2557,7 +2598,9 @@ function renderAdmin() {
     ${state.races.filter(r=>r.status==='finished').length ? `
     <p class="section-title" style="margin-top:20px;">🏁 歷史結果</p>
     ${state.races.filter(r=>r.status==='finished').map((r,ri,arr)=>{
-      const isLast = ri === arr.length - 1;
+      // 只有「已完結陣列中最後一筆」且「目前沒有任何進行中/開放中的賽事」時，才顯示「開啟下一場」
+      const hasActiveRace = state.races.some(x => x.status === 'open' || x.status === 'closed');
+      const isLast = ri === arr.length - 1 && !hasActiveRace;
       const rawPos = r.result?.positions;
       const posList = Array.isArray(rawPos) ? rawPos : (rawPos&&typeof rawPos==='object'?Object.values(rawPos):[]);
       const ranked  = posList.filter(id=>id&&typeof id==='string');
@@ -2618,7 +2661,6 @@ function createRace() {
   if (state.races.length > 0) { toast('⚠️ 已有賽事，請從「▶ 開啟下一場」建立後續場次'); return; }
   const prefix = (document.getElementById('new-race-prefix').value || '').trim();
   if (!prefix) { toast('請輸入賽事名稱前綴'); return; }
-  const time = document.getElementById('new-race-time')?.value || '16:00';
 
   const n = state.races.length + 1;
   const index = _CN_NUM[n] || String(n);
@@ -2644,12 +2686,12 @@ function createRace() {
     });
   });
 
-  const newRace = { id: raceId, name, time, status: 'open', horses: raceHorses, quinellaOdds: raceQ, result: null };
+  const newRace = { id: raceId, name, openedAt: Date.now(), status: 'open', horses: raceHorses, quinellaOdds: raceQ, result: null };
   state.races.push(newRace);
   state.activeRaceId = raceId;
   save();
-  _autoCloseRace(newRace); // 排程精確自動截止
-  toast('✅ 已建立賽事！');
+  _autoCloseRace(newRace); // 排程 5 分鐘自動截止
+  toast(`✅ 已建立賽事！下注將於 ${AUTO_CLOSE_MINUTES} 分鐘後自動截止`);
   renderAdmin();
 }
 
@@ -2657,9 +2699,11 @@ function createRace() {
 function createNextRace(sourceRaceId) {
   const source = state.races.find(r => r.id === sourceRaceId);
   if (!source || source.status !== 'finished') { toast('找不到已完結賽事'); return; }
+  // 防呆：若目前已有進行中的賽事，禁止再開
+  const hasActive = state.races.some(x => x.status === 'open' || x.status === 'closed');
+  if (hasActive) { toast('⚠️ 目前已有進行中的賽事，請等該場結算後再開啟下一場'); return; }
 
   const prefix = (document.getElementById('new-race-prefix')?.value || '').trim() || getDefaultRacePrefix();
-  const time = document.getElementById('new-race-time')?.value || '16:00';
 
   // 依前場名次計算調整後賠率（horseId → newOdds）
   const adjustedOdds = calcNextRaceOdds(source);
@@ -2701,12 +2745,12 @@ function createNextRace(sourceRaceId) {
   saveDefaultHorses();
   saveDefaultQuinella();
 
-  const nextRace = { id: raceId, name, time, status: 'open', horses: raceHorses, quinellaOdds: raceQ, result: null };
+  const nextRace = { id: raceId, name, openedAt: Date.now(), status: 'open', horses: raceHorses, quinellaOdds: raceQ, result: null };
   state.races.push(nextRace);
   state.activeRaceId = raceId;
   save();
-  _autoCloseRace(nextRace); // 排程精確自動截止
-  toast('✅ 下一場已建立，賠率已依前場名次調整！');
+  _autoCloseRace(nextRace); // 排程 5 分鐘自動截止
+  toast(`✅ 下一場已建立，賠率已依前場名次調整！下注將於 ${AUTO_CLOSE_MINUTES} 分鐘後自動截止`);
   renderAdmin();
 }
 
@@ -3555,39 +3599,34 @@ STATE_REF.on('value', snapshot => {
     </div>`;
 });
 
-// ── 精確自動截止：計算到發車時間的 ms，用 setTimeout 精準觸發 ──
-// 比 setInterval 30秒輪詢更精確，最多延遲 1 秒
+// ── 自動截止：開局後 5 分鐘自動關閉下注（不再依賴發車時間欄位）──
+const AUTO_CLOSE_MINUTES = 5;
 const _autoCloseTimers = {};
 
 function _autoCloseRace(race) {
-  if (!race || race.status !== 'open' || !race.time) return;
-  // 清除舊計時器（避免重複）
+  if (!race || race.status !== 'open') return;
   if (_autoCloseTimers[race.id]) { clearTimeout(_autoCloseTimers[race.id]); delete _autoCloseTimers[race.id]; }
 
-  const [hh, mm] = race.time.split(':').map(Number);
-  const closeAt = new Date(); closeAt.setHours(hh, mm, 0, 0);
-  const msLeft = closeAt - Date.now();
+  const openedAt = race.openedAt || Date.now();
+  const closeAt  = openedAt + AUTO_CLOSE_MINUTES * 60 * 1000;
+  const msLeft   = closeAt - Date.now();
+
+  const doClose = () => {
+    const r = state.races.find(x => x.id === race.id);
+    if (r && r.status === 'open') {
+      r.status = 'closed';
+      savePartial({ races: state.races });
+      toast(`⏰ 已自動關閉下注（開局 ${AUTO_CLOSE_MINUTES} 分鐘到）`);
+      const activeTab = document.querySelector('.tab.active');
+      if (activeTab) renderPage(activeTab.dataset.tab);
+    }
+    delete _autoCloseTimers[race.id];
+  };
 
   if (msLeft <= 0) {
-    // 已超過發車時間，立即關閉
-    race.status = 'closed';
-    savePartial({ races: state.races });
-    toast('⏰ 已自動關閉截止時間到期的下注通道');
-    const activeTab = document.querySelector('.tab.active');
-    if (activeTab) renderPage(activeTab.dataset.tab);
+    doClose();
   } else {
-    // 計算精確時間點
-    _autoCloseTimers[race.id] = setTimeout(() => {
-      const r = state.races.find(x => x.id === race.id);
-      if (r && r.status === 'open') {
-        r.status = 'closed';
-        savePartial({ races: state.races });
-        toast('⏰ 已自動關閉截止時間到期的下注通道');
-        const activeTab = document.querySelector('.tab.active');
-        if (activeTab) renderPage(activeTab.dataset.tab);
-      }
-      delete _autoCloseTimers[race.id];
-    }, msLeft);
+    _autoCloseTimers[race.id] = setTimeout(doClose, msLeft);
   }
 }
 
