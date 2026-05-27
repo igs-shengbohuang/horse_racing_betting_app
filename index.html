@@ -862,14 +862,10 @@ let state = {
     {id:'admin',name:'管理員',role:'admin',points:0,color:0},
   ],
   teams: [],   // [{id, name, color}]  玩家透過 user.teamId 關聯
-  races: [
-    {id:'r1',name:'第一場 精英盃',time:'14:30',status:'open',
-     horses: DEFAULT_HORSES.map((h, i) => ({ id: 'h' + i, ...h })),
-     result:null}
-  ],
+  races: [],
   bets: [],
   currentUser: null,
-  activeRaceId: 'r1', 
+  activeRaceId: null,
   pendingBet: null,
   currentBetType: 'win',
   pendingBets: [],  // 待送出清單（只存本機，不同步 Firebase）
@@ -1729,7 +1725,13 @@ function raceCard(race) {
   const _PLAYER_VIEW_MARKER_ = true;
   return `<div class="race-card" style="box-shadow:0 4px 12px rgba(0,0,0,0.05);border:none;padding:14px;">
     <div class="race-header"><div class="race-name">${race.name}</div><span class="race-status ${statusClass[race.status]}">${statusLabel[race.status]}</span></div>
-    ${race.status === 'open' && race.openedAt ? `<div class="race-meta" style="margin-bottom:12px;" id="countdown-${race.id}">⏱ 下注截止倒數：計算中...</div>` : ''}
+    ${race.status === 'open' && race.openedAt ? `<div class="race-meta" style="margin-bottom:8px;" id="countdown-${race.id}">⏱ 下注截止倒數：計算中...</div>` : ''}
+    ${race.status === 'open' && user.role !== 'admin' ? `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+      <button onclick="autoPick('${race.id}')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;border-radius:10px;font-size:calc(12px * var(--font-multiplier));font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(79,70,229,0.35);touch-action:manipulation;">
+        🎲 電腦選號
+      </button>
+    </div>` : ''}
     <div style="position:relative;border-radius:12px;overflow:hidden;padding:12px 10px 10px;margin-bottom:4px;">
       <!-- 背景圖層 -->
       <div style="position:absolute;inset:0;background-image:url('racing-bg.jpg');background-size:cover;background-position:center;z-index:0;"></div>
@@ -1835,6 +1837,10 @@ function selectBetType(type, btn) {
 // ── 最低下注金額設定 ──
 const MIN_BET_WIN      = 100;
 const MIN_BET_QUINELLA = 200;
+const MIN_RACE_BET     = 300;   // 每場最低投注額（未達此額會觸發強制下注）
+const FORCED_BET_PCT   = 0.30;  // 強制下注佔當前資產比例
+const FORCED_MIN_COUNT = 3;     // 強制下注最少筆數
+const TEAM_TOTAL_PTS   = 30000; // 小組初始總積分
 
 function _getMinBet(type) {
   return type === 'quinella' ? MIN_BET_QUINELLA : MIN_BET_WIN;
@@ -2235,7 +2241,7 @@ function betSlip(bet) {
       <div class="slip-horse" style="${isQuinella?'font-size:calc(15px * var(--font-multiplier));':''}">${horseLine}</div>
       <div style="font-size:calc(16px * var(--font-multiplier));font-weight:600;color:var(--color-text-primary)">${bet.amount} pts</div>
     </div>
-    <div class="slip-type">${typeLabel} · 賠率 ${bet.odds||'—'}x</div>
+    <div class="slip-type">${typeLabel}${bet.forced ? ' <span style="font-size:calc(10px * var(--font-multiplier));background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px;">強制</span>' : ''} · 賠率 ${bet.odds||'—'}x</div>
     ${resultHtml}
     ${!bet.settled?`<div style="font-size:calc(13px * var(--font-multiplier)); font-weight:500; color:var(--primary); margin-top:8px;">⏳ 等待開獎...</div>`:''}
   </div>`;
@@ -2556,7 +2562,7 @@ function renderAdmin() {
     <div class="admin-card" style="border-color:#fca5a5;background:#fff5f5;">
       <div style="font-size:calc(14px * var(--font-multiplier));font-weight:600;color:#dc2626;margin-bottom:8px;">清除所有賽事記錄</div>
       <div style="font-size:calc(13px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:14px;line-height:1.5;">
-        刪除所有賽事紀錄與下注資料，並將所有玩家積分重置為 <b>${getDefaultPoints()}</b>。<br>
+        刪除所有賽事紀錄與下注資料，並依各小組人數平均重置積分（小組總額固定 <b>${TEAM_TOTAL_PTS}</b> pts，未分組玩家重置為 ${getDefaultPoints()} pts）。<br>
         <span style="color:#16a34a;font-weight:600;">✓ 馬匹名稱、賠率、組別及玩家設定不受影響。</span>
       </div>
       <button onclick="clearAllData()" style="background:#dc2626;color:#fff;border:none;border-radius:var(--border-radius-sm);padding:10px 20px;font-size:calc(14px * var(--font-multiplier));font-weight:600;cursor:pointer;width:100%;">⚠️ 清除所有賽事記錄並重置積分</button>
@@ -2788,7 +2794,161 @@ function updateDefaultQuinellaFromHorse() {
 
 function updateRaceStatus(raceId, status) {
   const race = state.races.find(r=>r.id===raceId);
-  if(race) { race.status=status; savePartial({ races: state.races }); toast('狀態已更新'); }
+  if (!race) return;
+  const wasOpen = race.status === 'open';
+  race.status = status;
+  savePartial({ races: state.races });
+  toast('狀態已更新');
+  // 手動截止下注時，觸發強制下注檢查
+  if (wasOpen && status === 'closed') {
+    setTimeout(() => _forceBetsForRace(race), 300);
+  }
+}
+
+// ── 電腦選號：隨機產生一注並直接送出 ──
+function autoPick(raceId) {
+  const race = state.races.find(r => r.id === raceId);
+  if (!race || race.status !== 'open') { toast('下注已截止'); return; }
+  const user = getUser();
+  if (!user || user.role === 'admin') return;
+
+  const usedPending = (state.pendingBets||[]).filter(b=>b.raceId===raceId).reduce((s,b)=>s+b.amount,0);
+  const available = user.points - usedPending;
+  const maxAmt = Math.floor(available * 0.30);
+  if (maxAmt < MIN_BET_WIN) {
+    toast('可用資產不足（需至少 ' + Math.ceil(MIN_BET_WIN / 0.3) + ' pts 才可電腦選號）');
+    return;
+  }
+
+  const canQuin = maxAmt >= MIN_BET_QUINELLA;
+  const type = canQuin && Math.random() < 0.5 ? 'quinella' : 'win';
+  const minBet = type === 'quinella' ? MIN_BET_QUINELLA : MIN_BET_WIN;
+  const steps = Math.floor((maxAmt - minBet) / 50);
+  const amount = minBet + (steps > 0 ? Math.floor(Math.random() * (steps + 1)) * 50 : 0);
+
+  const horses = race.horses;
+  let betObj;
+
+  if (type === 'quinella') {
+    const sh = [...horses].sort(() => Math.random() - 0.5);
+    const h1 = sh[0], h2 = sh[1];
+    const pk = quinellaKey(h1.id, h2.id);
+    // 若已有相同組合，重試
+    if (state.bets.find(b=>b.userId===user.id&&b.raceId===raceId&&b.type==='quinella'&&quinellaKey(b.horseId,b.horseId2)===pk&&!b.settled)) {
+      return autoPick(raceId);
+    }
+    const odds = getQuinellaOdds(race, h1.id, h2.id);
+    betObj = {id:'b'+Date.now()+'_'+Math.random().toString(36).slice(2,7), userId:user.id, raceId, horseId:h1.id, horseId2:h2.id, type:'quinella', amount, odds, settled:false, won:false, payout:0};
+  } else {
+    const horse = horses[Math.floor(Math.random() * horses.length)];
+    if (state.bets.find(b=>b.userId===user.id&&b.raceId===raceId&&b.horseId===horse.id&&b.type==='win'&&!b.settled)) {
+      return autoPick(raceId);
+    }
+    betObj = {id:'b'+Date.now()+'_'+Math.random().toString(36).slice(2,7), userId:user.id, raceId, horseId:horse.id, type:'win', amount, odds:horse.odds, settled:false, won:false, payout:0};
+  }
+
+  state.bets.push(betObj);
+  user.points -= amount;
+  savePartial({ bets: state.bets, users: state.users });
+  const typeName = type === 'quinella' ? '連贏' : '獨贏';
+  toast(`🎲 電腦選號（${typeName}）已送出 ${amount} pts！`);
+  const activeTab = document.querySelector('.tab.active');
+  if (activeTab) renderPage(activeTab.dataset.tab);
+}
+
+// ── 強制下注：下注截止時補足未達最低投注額的玩家 ──
+function _forceBetsForRace(race) {
+  if (!race) return;
+  const players = state.users.filter(u => u.role !== 'admin');
+  let changed = false;
+  const notif = [];
+
+  players.forEach(player => {
+    const currentTotal = state.bets
+      .filter(b => b.userId === player.id && b.raceId === race.id && !b.settled)
+      .reduce((s, b) => s + b.amount, 0);
+    if (currentTotal >= MIN_RACE_BET) return; // 已足額，跳過
+
+    const assets = player.points;
+    if (assets <= 0) return;
+
+    // 計算強制下注總額
+    let budget;
+    if (assets < MIN_RACE_BET) {
+      // 資產不足 300：依比例（30%），例外機制
+      budget = Math.floor(assets * FORCED_BET_PCT);
+    } else {
+      // 正常：取「補足缺口」和「30% 資產」的較大值
+      const needed = MIN_RACE_BET - currentTotal;
+      budget = Math.max(needed, Math.floor(assets * FORCED_BET_PCT));
+    }
+    budget = Math.min(budget, assets); // 不能超過持有資產
+
+    if (budget < MIN_BET_WIN) return; // 低於獨贏最低限，無法下任何注
+
+    // 決定能產生幾注（至少 FORCED_MIN_COUNT，但受限於預算）
+    const maxPossible = Math.floor(budget / MIN_BET_WIN);
+    const betCount = Math.max(1, Math.min(FORCED_MIN_COUNT, maxPossible));
+
+    const newBets = [];
+    let remaining = budget;
+
+    for (let i = 0; i < betCount; i++) {
+      if (remaining < MIN_BET_WIN) break;
+      const isLast = i === betCount - 1;
+
+      // 優先獨贏，有多餘空間時隨機加連贏
+      const canQuin = !isLast && remaining >= MIN_BET_QUINELLA * 2;
+      const useType = canQuin && Math.random() < 0.35 ? 'quinella' : 'win';
+      const useMin  = useType === 'quinella' ? MIN_BET_QUINELLA : MIN_BET_WIN;
+      if (remaining < useMin) { /* 改回 win */ }
+      const finalType = (useType === 'quinella' && remaining >= MIN_BET_QUINELLA) ? 'quinella' : 'win';
+      const finalMin  = finalType === 'quinella' ? MIN_BET_QUINELLA : MIN_BET_WIN;
+      if (remaining < finalMin) break;
+
+      // 金額分配
+      let amount;
+      if (isLast) {
+        amount = remaining;
+      } else {
+        const share = Math.floor(remaining / (betCount - i));
+        amount = share + Math.floor(Math.random() * Math.max(1, share * 0.2));
+      }
+      const roundTo = amount >= 200 ? 50 : 10;
+      amount = Math.round(amount / roundTo) * roundTo;
+      amount = Math.max(finalMin, Math.min(amount, remaining));
+      if (amount < finalMin) break;
+
+      const horses = race.horses;
+      let betObj;
+      if (finalType === 'quinella') {
+        const sh = [...horses].sort(() => Math.random() - 0.5);
+        const h1 = sh[0], h2 = sh[1];
+        const odds = getQuinellaOdds(race, h1.id, h2.id);
+        betObj = {id:'f'+Date.now()+'_'+i+'_'+Math.random().toString(36).slice(2,5), userId:player.id, raceId:race.id, horseId:h1.id, horseId2:h2.id, type:'quinella', amount, odds, settled:false, won:false, payout:0, forced:true};
+      } else {
+        const horse = horses[Math.floor(Math.random() * horses.length)];
+        betObj = {id:'f'+Date.now()+'_'+i+'_'+Math.random().toString(36).slice(2,5), userId:player.id, raceId:race.id, horseId:horse.id, type:'win', amount, odds:horse.odds, settled:false, won:false, payout:0, forced:true};
+      }
+      newBets.push(betObj);
+      remaining -= amount;
+    }
+
+    if (newBets.length > 0) {
+      const totalF = newBets.reduce((s, b) => s + b.amount, 0);
+      newBets.forEach(b => state.bets.push(b));
+      player.points -= totalF;
+      changed = true;
+      notif.push(`${player.name}（強制 ${newBets.length} 注 / ${totalF} pts）`);
+    }
+  });
+
+  if (changed) {
+    savePartial({ bets: state.bets, users: state.users });
+    if (notif.length) toast('🤖 強制下注已補足：' + notif.join('、'));
+    const activeTab = document.querySelector('.tab.active');
+    if (activeTab) renderPage(activeTab.dataset.tab);
+  }
 }
 
 // 級聯下拉：已選馬匹從後續名次移除
@@ -3243,11 +3403,12 @@ function adminResetTeamPoints(teamId) {
   ensureTeams();
   const team = state.teams.find(t => t.id === teamId);
   if (!team) return;
-  const dp = getDefaultPoints();
-  if (!confirm(`確定要將「${team.name}」所有玩家積分重置為 ${dp}？`)) return;
-  state.users.filter(u => u.teamId === teamId).forEach(u => { u.points = dp; });
+  const players = state.users.filter(u => u.teamId === teamId && u.role !== 'admin');
+  const perPlayer = players.length > 0 ? Math.floor(TEAM_TOTAL_PTS / players.length) : TEAM_TOTAL_PTS;
+  if (!confirm(`確定要重置「${team.name}」的積分？\n共 ${players.length} 位玩家，每人分配 ${perPlayer} pts\n（小組總積分固定 ${TEAM_TOTAL_PTS} pts）`)) return;
+  players.forEach(u => { u.points = perPlayer; });
   savePartial({ users: state.users });
-  toast(`✅ 已重置「${team.name}」所有玩家積分`);
+  toast(`✅ 已重置「${team.name}」：${players.length} 位玩家各 ${perPlayer} pts`);
   renderTeamSettings();
 }
 
@@ -3281,12 +3442,18 @@ function clearAllTeamsAndPlayers() {
 function clearAllData() {
   if(!confirm('⚠️ 確定要清除所有賽事紀錄並重置所有隊伍積分嗎？\n\n此操作不可復原！')) return;
   const dp = getDefaultPoints();
-  if(!confirm(`再次確認：清除所有賽事、所有下注，並將所有隊伍積分重置為 ${dp}？`)) return;
+  if(!confirm(`再次確認：清除所有賽事、所有下注，並依各小組人數重置積分（小組總額 ${TEAM_TOTAL_PTS} pts 平均分配）？`)) return;
   state.races = [];
   state.bets = [];
   state.activeRaceId = null;
-  // 重置所有玩家積分（保留組別和玩家設定）
-  state.users.forEach(u=>{ if(u.role!=='admin') u.points = dp; });
+  // 依小組人數平均分配 TEAM_TOTAL_PTS；未分組玩家用 getDefaultPoints()
+  (state.teams||[]).forEach(team => {
+    const members = state.users.filter(u => u.teamId === team.id && u.role !== 'admin');
+    if (!members.length) return;
+    const perPlayer = Math.floor(TEAM_TOTAL_PTS / members.length);
+    members.forEach(u => { u.points = perPlayer; });
+  });
+  state.users.filter(u => u.role !== 'admin' && !u.teamId).forEach(u => { u.points = dp; });
   // 同步清除 JP 得獎記錄
   _jpWinners.length = 0;
   _jpSaveWinners();
@@ -3619,6 +3786,8 @@ function _autoCloseRace(race) {
       toast(`⏰ 已自動關閉下注（開局 ${AUTO_CLOSE_MINUTES} 分鐘到）`);
       const activeTab = document.querySelector('.tab.active');
       if (activeTab) renderPage(activeTab.dataset.tab);
+      // 強制下注：補足未達最低投注額的玩家
+      setTimeout(() => _forceBetsForRace(r), 400);
     }
     delete _autoCloseTimers[race.id];
   };
