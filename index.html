@@ -4180,15 +4180,26 @@ function whStopGame() {
   const resOuter = WH.outerOptions[idxOuter] || (String.fromCharCode(65 + idxOuter) + '馬');
   const resInner = WH_INNER_OPTIONS[idxInner];
 
+  // ── K 馬特規：遇「後退N步」視為「前進N步」──
+  const isKHorse = resOuter.startsWith('K');
+  const isBackward = resInner.fullName.includes('後退');
+  const effectiveInner = (isKHorse && isBackward)
+    ? {
+        fullName: resInner.fullName.replace('後退', '前進'),
+        c: '✨ K馬特規！逢退化進！',
+        color: '#1b5e20'
+      }
+    : resInner;
+
   setTimeout(function() {
     WH.outerTextEls[idxOuter].classList.add('wh-winning-glow');
     WH.innerTextEls[idxInner].classList.add('wh-winning-glow');
     document.getElementById('wh-rh').innerText = '[ ' + resOuter + ' ]';
-    document.getElementById('wh-rt').innerText = resInner.fullName;
-    document.getElementById('wh-rd').innerText = resInner.c;
+    document.getElementById('wh-rt').innerText = effectiveInner.fullName;
+    document.getElementById('wh-rd').innerText = effectiveInner.c;
     const card = document.getElementById('wh-result-card');
-    card.style.backgroundColor = resInner.color;
-    const tc = resInner.color === '#fbc02d' ? '#222' : '#fff';
+    card.style.backgroundColor = effectiveInner.color;
+    const tc = effectiveInner.color === '#fbc02d' ? '#222' : '#fff';
     ['wh-rh','wh-rt','wh-rd'].forEach(function(id){ document.getElementById(id).style.color = tc; });
     document.getElementById('wh-outer').style.transition = 'none';
     innerEl.style.transition = 'none';
