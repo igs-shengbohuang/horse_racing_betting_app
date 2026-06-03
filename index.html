@@ -2395,8 +2395,8 @@ function renderAdmin() {
       const j = idx+1;
       if (j<=i) return `<td style="background:#f3f4f6;text-align:center;padding:3px;color:#d1d5db;font-size:calc(12px * var(--font-multiplier));">—</td>`;
       const key = i+'_'+j;
-      const cur = _DEFAULT_QUINELLA[key] != null ? _DEFAULT_QUINELLA[key] : '';
-      return `<td style="padding:2px;"><input type="number" id="dqo_${key}" value="${cur}" min="1" step="0.1" style="width:100%;padding:5px 2px;font-size:calc(11px * var(--font-multiplier));text-align:center;border:1px solid var(--color-border-secondary);border-radius:4px;box-sizing:border-box;"></td>`;
+      const val = Math.round((DEFAULT_HORSES[i].odds * DEFAULT_HORSES[j].odds) / 2 * 10) / 10;
+      return `<td style="padding:4px;text-align:center;font-size:calc(12px * var(--font-multiplier));font-weight:600;color:#5b21b6;background:#f5f3ff;border-radius:4px;" id="dqd_${key}">${val}</td>`;
     }).join('');
     return `<tr><td style="${labelTdW}font-size:calc(11px * var(--font-multiplier));padding:4px;color:var(--color-text-secondary);font-weight:600;text-align:center;vertical-align:middle;">${idxToLetter(i)}<br><span style="font-size:calc(9px * var(--font-multiplier));font-weight:400;">${h1.name.slice(0,4)}</span></td>${cells}</tr>`;
   }).join('');
@@ -2478,7 +2478,7 @@ function renderAdmin() {
       ${adminSectionHeader('quinella','🔗','二重彩賠率設定（全域設定）','color:#5b21b6;')}
       ${adminSectionBody('quinella', `
         <p style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:10px;line-height:1.5;">
-          上三角格子為每組<b>連贏</b>組合賠率，修改後點「儲存」即生效。下次建立賽事時自動套用，<b>不影響已建立的賽事。</b>
+          上三角格子為每組<b>連贏</b>組合賠率，由上方馬匹賠率<b>自動計算</b>（公式：A × B ÷ 2），無需手動輸入。更新馬匹賠率後即時同步。
         </p>
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:14px;">
           <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
@@ -2486,7 +2486,6 @@ function renderAdmin() {
             <tbody>${quinRows}</tbody>
           </table>
         </div>
-        <button class="btn-primary" style="background:#7c3aed;" onclick="saveDefaultQuinellaFromUI()">儲存二重彩賠率</button>
       `)}
     </div>
 
@@ -2686,9 +2685,8 @@ function createRace() {
     raceHorses.forEach((h2, j) => {
       if (j <= i) return;
       const globalKey = i + '_' + j;
-      raceQ[quinellaKey(h1.id, h2.id)] = _DEFAULT_QUINELLA[globalKey] != null
-        ? _DEFAULT_QUINELLA[globalKey]
-        : Math.round((h1.odds * h2.odds) / 2 * 10) / 10;
+      // 連贏賠率統一由公式自動計算，不使用手動設定值
+      raceQ[quinellaKey(h1.id, h2.id)] = Math.round((h1.odds * h2.odds) / 2 * 10) / 10;
     });
   });
 
@@ -2780,13 +2778,17 @@ function saveDefaultQuinellaFromUI() {
   toast('✅ 二重彩賠率已儲存！下次建立賽事時自動套用。');
 }
 
-// 馬匹賠率修改時同步更新全域二重彩賠率預設值
+// 馬匹賠率修改時同步更新全域二重彩賠率預設值（並即時更新畫面上的顯示格）
 function updateDefaultQuinellaFromHorse() {
   DEFAULT_HORSES.forEach((h1, i) => {
     DEFAULT_HORSES.forEach((h2, j) => {
       if (j <= i) return;
       const key = i + '_' + j;
-      _DEFAULT_QUINELLA[key] = Math.round((h1.odds * h2.odds) / 2 * 10) / 10;
+      const newVal = Math.round((DEFAULT_HORSES[i].odds * DEFAULT_HORSES[j].odds) / 2 * 10) / 10;
+      _DEFAULT_QUINELLA[key] = newVal;
+      // 即時更新畫面顯示格（不需完整重繪）
+      const el = document.getElementById('dqd_' + key);
+      if (el) el.textContent = newVal;
     });
   });
   saveDefaultQuinella();
