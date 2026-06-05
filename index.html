@@ -274,6 +274,24 @@
   }
   .rro-close-btn:active { background: #1d4ed8; }
 
+  /* ── 開局賠率彈窗 ── */
+  #odds-preview-overlay {
+    display: none; position: fixed; inset: 0; z-index: 9200;
+    background: rgba(0,0,0,0.6); align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  #odds-preview-overlay.opo-active { display: flex; }
+  #odds-preview-card {
+    background: #fff; border-radius: 20px; padding: 20px;
+    max-width: 360px; width: 100%; max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    animation: opo-in 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+  @keyframes opo-in {
+    from { opacity:0; transform: scale(0.8) translateY(30px); }
+    to   { opacity:1; transform: scale(1) translateY(0); }
+  }
+
   .rro-confetti {
     position: absolute;
     width: 10px; height: 10px;
@@ -409,31 +427,6 @@
     box-shadow: 0 5px 20px rgba(0,0,0,0.25); z-index: 500;
   }
 
-  /* ── WebRTC 直播 ── */
-  #stream-overlay {
-    position: fixed; bottom: 90px; right: 14px; z-index: 9980;
-    background: #000; border-radius: 14px; overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.45);
-    width: 220px; display: none; flex-direction: column;
-    border: 2px solid rgba(239,68,68,0.6);
-  }
-  #stream-overlay.maximized { width: min(90vw, 480px); bottom: 50%; right: 50%; transform: translate(50%, 50%); }
-  #stream-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 7px 10px; background: rgba(0,0,0,0.6); cursor: default;
-  }
-  #stream-video { width: 100%; display: block; max-height: 160px; object-fit: cover; background:#111; }
-  #stream-overlay.maximized #stream-video { max-height: 60vh; }
-  @keyframes live-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-  .live-dot { width:9px;height:9px;border-radius:50%;background:#ef4444;animation:live-pulse 1.2s infinite;flex-shrink:0; }
-  #stream-fab {
-    position: fixed; bottom: 90px; right: 14px; z-index: 9979;
-    background: #ef4444; color: #fff; border: none; border-radius: 50px;
-    padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer;
-    box-shadow: 0 4px 14px rgba(239,68,68,0.5); display: none;
-    align-items: center; gap: 6px;
-  }
-  #broadcast-preview { width:100%; border-radius:8px; background:#000; max-height:180px; object-fit:cover; display:none; }
 
   /* ── JP 得獎記錄面板 ── */
   #jp-list-panel {
@@ -709,12 +702,15 @@
       </div>
     </div>
     <div class="form-row" style="margin-top: 24px;">
-      <label>下注點數</label>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <label style="margin-bottom:0;">下注點數</label>
+        <span id="modal-available-pts" style="font-size:calc(12px * var(--font-multiplier));color:#6b7280;"></span>
+      </div>
       <div class="chip-row" id="chip-row">
-        <button class="chip" onclick="setChip(100)">100</button>
-        <button class="chip" onclick="setChip(200)">200</button>
-        <button class="chip" onclick="setChip(500)">500</button>
-        <button class="chip" onclick="setChip(1000)">1000</button>
+        <button class="chip" onclick="addChip(200)">+200</button>
+        <button class="chip" onclick="addChip(500)">+500</button>
+        <button class="chip" onclick="addChip(1000)">+1000</button>
+        <button class="chip" onclick="addChip(2000)">+2000</button>
         <button class="chip" onclick="setChip(0)">清除</button>
       </div>
       <input type="number" id="modal-amount" placeholder="輸入點數..." min="1" oninput="updatePayout()" onblur="enforceMinBet()" style="font-size:calc(16px * var(--font-multiplier)); padding:12px 14px;">
@@ -729,31 +725,6 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- 📹 直播浮動視窗（觀看端） -->
-<div id="stream-overlay">
-  <div id="stream-header">
-    <div style="display:flex;align-items:center;gap:6px;">
-      <div class="live-dot"></div>
-      <span style="color:#fff;font-size:12px;font-weight:700;letter-spacing:1px;">LIVE</span>
-    </div>
-    <div style="display:flex;gap:4px;">
-      <button onclick="_toggleStreamMax()" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:17px;line-height:1;padding:2px 5px;" title="展開">⛶</button>
-      <button id="stream-fs-btn" onclick="_toggleStreamFullscreen()" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:16px;line-height:1;padding:2px 5px;" title="全螢幕">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
-          <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
-        </svg>
-      </button>
-      <button onclick="_closeStreamOverlay()" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:20px;line-height:1;padding:2px 5px;" title="最小化">−</button>
-    </div>
-  </div>
-  <video id="stream-video" autoplay playsinline muted style="width:100%;display:block;max-height:160px;object-fit:cover;background:#111;"></video>
-</div>
-
-<!-- 📹 直播 FAB（關閉後顯示，點擊重開） -->
-<button id="stream-fab" onclick="_openStreamOverlay()">
-  <div class="live-dot"></div> LIVE 直播
-</button>
 
 <!-- 連線中畫面 -->
 <div id="loading-overlay" style="position:fixed;inset:0;background:#fff;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;">
@@ -898,7 +869,6 @@ firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.database();
 const STATE_REF      = db.ref('hrapp');
 const SETTINGS_REF   = db.ref('hrapp_settings');   // 全域設定（不被 clearAllData 清除）
-const STREAM_REF     = db.ref('hrapp_stream');      // WebRTC 信令節點
 const SESSIONS_REF   = db.ref('hrapp_sessions');   // 線上登入狀態（裝置斷線自動清除）
 const JP_WINNERS_REF = db.ref('hrapp_jp_winners'); // JP 得獎記錄（跨裝置同步）
 
@@ -925,276 +895,7 @@ function _markOffline(userId) {
   SESSIONS_REF.child(userId).remove();
 }
 
-// ============================================================
-// 📹 WebRTC 直播系統（同 WiFi 低延遲，無需付費）
-// ============================================================
-const _ICE_CFG = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}] };
-let _localStream    = null;       // 直播端攝影機串流
-let _peerConns      = {};         // {viewerId: RTCPeerConnection}
-let _viewerPC       = null;       // 觀看端連線
-let _isBroadcasting = false;
-const _myViewerId   = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
 
-// ── 直播預覽重新附加（renderAdmin 重繪後呼叫）──
-function _syncBroadcastPreview() {
-  if (!_isBroadcasting || !_localStream) return;
-  const p = document.getElementById('broadcast-preview');
-  if (p && p.srcObject !== _localStream) { p.srcObject = _localStream; }
-  _syncBroadcastZoom();
-}
-
-// ── 縮放滑桿初始化（依裝置能力顯示或隱藏）──
-function _syncBroadcastZoom() {
-  const wrap = document.getElementById('zoom-wrap');
-  if (!wrap || !_localStream) return;
-  const track = _localStream.getVideoTracks()[0];
-  if (!track) return;
-  try {
-    const caps = track.getCapabilities ? track.getCapabilities() : {};
-    if (caps.zoom) {
-      const slider = document.getElementById('zoom-slider');
-      const label  = document.getElementById('zoom-label');
-      if (slider) {
-        slider.min   = caps.zoom.min;
-        slider.max   = caps.zoom.max;
-        slider.step  = caps.zoom.step || 0.1;
-        // 保留上次值，若未設定就用最小值
-        if (!slider.dataset.init) {
-          slider.value = caps.zoom.min;
-          slider.dataset.init = '1';
-        }
-        if (label) label.textContent = parseFloat(slider.value).toFixed(1) + 'x';
-      }
-      wrap.style.display = '';
-    } else {
-      wrap.style.display = 'none';
-    }
-  } catch(e) { wrap.style.display = 'none'; }
-}
-
-// ── 套用縮放值 ──
-function setBroadcastZoom(val) {
-  if (!_localStream) return;
-  const track = _localStream.getVideoTracks()[0];
-  if (!track) return;
-  const label = document.getElementById('zoom-label');
-  if (label) label.textContent = parseFloat(val).toFixed(1) + 'x';
-  track.applyConstraints({ advanced: [{ zoom: parseFloat(val) }] }).catch(() => {});
-}
-
-// ── 直播端：共用串流啟動邏輯（避免重複代碼）──
-async function _startBroadcastWithStream(stream, toastMsg) {
-  _localStream = stream;
-  _isBroadcasting = true;
-  const preview = document.getElementById('broadcast-preview');
-  if (preview) { preview.srcObject = stream; preview.style.display = 'block'; }
-
-  await STREAM_REF.set({ status: 'live', viewers: null, offers: null, answers: null,
-    bc_candidates: null, viewer_candidates: null });
-
-  // 監聽新觀看者加入
-  STREAM_REF.child('viewers').on('child_added', async snap => {
-    const vid = snap.key;
-    if (_peerConns[vid]) return;
-    const pc = new RTCPeerConnection(_ICE_CFG);
-    _peerConns[vid] = pc;
-    _localStream.getTracks().forEach(t => pc.addTrack(t, _localStream));
-    pc.onicecandidate = e => {
-      if (e.candidate) STREAM_REF.child('bc_candidates/' + vid).push(e.candidate.toJSON());
-    };
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    STREAM_REF.child('offers/' + vid).set({ sdp: offer.sdp, type: offer.type });
-    STREAM_REF.child('answers/' + vid).on('value', async s2 => {
-      const a = s2.val();
-      if (a && !pc.remoteDescription) await pc.setRemoteDescription(new RTCSessionDescription(a));
-    });
-    STREAM_REF.child('viewer_candidates/' + vid).on('child_added', s3 => {
-      const c = s3.val();
-      if (c) pc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
-    });
-  });
-
-  // 監聽觀看者離開
-  STREAM_REF.child('viewers').on('child_removed', snap => {
-    const vid = snap.key;
-    if (_peerConns[vid]) { _peerConns[vid].close(); delete _peerConns[vid]; }
-  });
-
-  toast(toastMsg || '📹 直播已開始！其他裝置會自動收到畫面');
-  const activeTab = document.querySelector('.tab.active');
-  if (activeTab?.dataset.tab === 'admin') { renderAdmin(); _syncBroadcastPreview(); }
-}
-
-// ── 直播端：開始直播 ──
-async function startBroadcast() {
-  if (_isBroadcasting) { toast('直播已在進行中'); return; }
-  try {
-    // 優先使用後置鏡頭（ideal 不強制，無後鏡頭時自動 fallback）
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' } },
-      audio: true
-    });
-    await _startBroadcastWithStream(stream, '📹 直播已開始！其他裝置會自動收到畫面');
-  } catch (err) {
-    _isBroadcasting = false;
-    const name = err.name || '';
-    let msg = '❌ 無法開啟攝影機';
-    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-      msg = '❌ 相機權限被拒絕\n\niOS：設定 → Safari → 相機 → 允許\nAndroid：設定 → 應用程式 → Chrome → 權限 → 相機';
-    } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-      msg = '❌ 找不到相機裝置，請確認此裝置有相機';
-    } else if (name === 'NotSupportedError' || name === 'NotReadableError') {
-      msg = '❌ 瀏覽器不支援相機存取\n\n請改用 Safari（iOS）或 Chrome（Android）開啟，並確認網址為 https://';
-    } else if (name === 'OverconstrainedError') {
-      // 降級嘗試：放寬條件，只要視訊，不指定音訊
-      try {
-        const fallbackStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } }, audio: false
-        });
-        await _startBroadcastWithStream(fallbackStream, '📹 直播已開始（僅視訊，無音訊）');
-        return;
-      } catch(e2) { msg = '❌ 相機完全無法存取：' + (e2.message || e2); }
-    } else {
-      msg = '❌ 相機錯誤：' + (err.message || name || err);
-    }
-    alert(msg);
-    console.error('broadcast error', err.name, err.message);
-  }
-}
-
-// ── 直播端：停止直播 ──
-function stopBroadcast() {
-  if (!confirm('確定要停止直播嗎？')) return;
-  _isBroadcasting = false;
-  if (_localStream) { _localStream.getTracks().forEach(t => t.stop()); _localStream = null; }
-  Object.values(_peerConns).forEach(pc => pc.close());
-  _peerConns = {};
-  STREAM_REF.off(); STREAM_REF.set(null);
-  const preview = document.getElementById('broadcast-preview');
-  if (preview) { preview.srcObject = null; preview.style.display = 'none'; }
-  toast('⏹️ 直播已停止');
-  const activeTab = document.querySelector('.tab.active');
-  if (activeTab?.dataset.tab === 'admin') renderAdmin();
-}
-
-// ── 觀看端：加入直播 ──
-async function _joinStream() {
-  if (_viewerPC) return;
-  STREAM_REF.child('viewers/' + _myViewerId).set({ joined: Date.now() });
-  const pc = new RTCPeerConnection(_ICE_CFG);
-  _viewerPC = pc;
-  pc.onicecandidate = e => {
-    if (e.candidate) STREAM_REF.child('viewer_candidates/' + _myViewerId).push(e.candidate.toJSON());
-  };
-  pc.ontrack = e => {
-    const v = document.getElementById('stream-video');
-    if (v) { v.srcObject = e.streams[0]; v.muted = false; }
-    _openStreamOverlay();
-  };
-  pc.onconnectionstatechange = () => {
-    if (['failed','disconnected','closed'].includes(pc.connectionState)) _leaveStream();
-  };
-  STREAM_REF.child('offers/' + _myViewerId).on('value', async snap => {
-    const o = snap.val();
-    if (!o || pc.remoteDescription) return;
-    await pc.setRemoteDescription(new RTCSessionDescription(o));
-    const ans = await pc.createAnswer();
-    await pc.setLocalDescription(ans);
-    STREAM_REF.child('answers/' + _myViewerId).set({ sdp: ans.sdp, type: ans.type });
-  });
-  STREAM_REF.child('bc_candidates/' + _myViewerId).on('child_added', snap => {
-    const c = snap.val();
-    if (c) pc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
-  });
-}
-
-// ── 觀看端：離開 ──
-function _leaveStream() {
-  if (_viewerPC) { _viewerPC.close(); _viewerPC = null; }
-  STREAM_REF.child('viewers/' + _myViewerId).remove();
-  STREAM_REF.child('viewer_candidates/' + _myViewerId).remove();
-  STREAM_REF.child('answers/' + _myViewerId).remove();
-  const v = document.getElementById('stream-video');
-  if (v) v.srcObject = null;
-}
-
-// ── 浮動視窗控制 ──
-function _openStreamOverlay() {
-  const ov = document.getElementById('stream-overlay');
-  const fab = document.getElementById('stream-fab');
-  if (ov) { ov.style.display = 'flex'; }
-  if (fab) fab.style.display = 'none';
-}
-function _closeStreamOverlay() {
-  const ov = document.getElementById('stream-overlay');
-  const fab = document.getElementById('stream-fab');
-  if (ov) ov.style.display = 'none';
-  if (fab) fab.style.display = 'flex';
-}
-function _toggleStreamMax() {
-  const ov = document.getElementById('stream-overlay');
-  if (ov) ov.classList.toggle('maximized');
-}
-
-function _toggleStreamFullscreen() {
-  const v = document.getElementById('stream-video');
-  if (!v) return;
-
-  // 已在全螢幕 → 離開
-  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-  if (fsEl) {
-    (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
-    return;
-  }
-
-  // iOS Safari：video 元素直接支援 webkitEnterFullscreen
-  if (v.webkitEnterFullscreen) {
-    v.webkitEnterFullscreen();
-    return;
-  }
-
-  // Android / 桌面：優先對 video 元素全螢幕，fallback 對 overlay
-  const target = v.requestFullscreen ? v : document.getElementById('stream-overlay');
-  if (target && target.requestFullscreen) {
-    target.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
-  } else if (target && target.webkitRequestFullscreen) {
-    target.webkitRequestFullscreen();
-  }
-}
-
-// 全螢幕狀態改變時，更新按鈕圖示
-(function _initFsListener() {
-  var exitIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>';
-  var enterIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
-  function onFsChange() {
-    var btn = document.getElementById('stream-fs-btn');
-    if (!btn) return;
-    var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    btn.innerHTML = isFs ? exitIcon : enterIcon;
-    btn.title = isFs ? '退出全螢幕' : '全螢幕';
-  }
-  document.addEventListener('fullscreenchange', onFsChange);
-  document.addEventListener('webkitfullscreenchange', onFsChange);
-})();
-
-// ── 監聽全域直播狀態 ──
-STREAM_REF.child('status').on('value', snap => {
-  const isLive = snap.val() === 'live';
-  const fab = document.getElementById('stream-fab');
-  const overlay = document.getElementById('stream-overlay');
-  const user = typeof getUser === 'function' ? getUser() : null;
-  const isAdmin = user && user.role === 'admin';
-
-  if (isLive && !isAdmin && !_isBroadcasting) {
-    if (fab) fab.style.display = 'flex';
-    if (!_viewerPC) _joinStream();
-  } else if (!isLive) {
-    if (fab) fab.style.display = 'none';
-    if (overlay) overlay.style.display = 'none';
-    _leaveStream();
-  }
-});
 
 // ─── 文字縮放：每個裝置獨立儲存，預設 2.5x（只縮放文字，不縮放佈局） ──────
 function getFontScale() {
@@ -1236,22 +937,20 @@ function save() {
     activeRaceId: state.activeRaceId !== undefined ? state.activeRaceId : null,
     requirePassword: state.requirePassword !== false
   }).catch(err => console.error('Firebase 儲存失敗:', err));
-  try { localStorage.setItem('hrapp_local', JSON.stringify({currentUser: state.currentUser, pendingBets: state.pendingBets||[]})); } catch(e) {}
 }
 
 // 局部更新：只寫入有變動的欄位，減少 Firebase 傳輸量
 // 例：savePartial({ races: state.races }) 只覆寫 races 路徑
 function savePartial(fields) {
-  const promise = STATE_REF.update(fields).catch(err => console.error('Firebase 局部儲存失敗:', err));
-  try { localStorage.setItem('hrapp_local', JSON.stringify({currentUser: state.currentUser, pendingBets: state.pendingBets||[]})); } catch(e) {}
-  return promise;
+  return STATE_REF.update(fields).catch(err => console.error('Firebase 局部儲存失敗:', err));
 }
 
 function savePending() {
+  // pendingBets 為本機暫存，用 sessionStorage 儲存（per-tab）
   try {
-    const local = JSON.parse(localStorage.getItem('hrapp_local')||'{}');
-    local.pendingBets = state.pendingBets || [];
-    localStorage.setItem('hrapp_local', JSON.stringify(local));
+    const sess = JSON.parse(sessionStorage.getItem('hrapp_session') || '{}');
+    sess.pendingBets = state.pendingBets || [];
+    sessionStorage.setItem('hrapp_session', JSON.stringify(sess));
   } catch(e) {}
 }
 
@@ -1402,7 +1101,8 @@ function login(userId) {
       // 搶佔成功：設定斷線自動清除
       SESSIONS_REF.child(userId).onDisconnect().remove();
       state.currentUser = userId;
-      save();
+      // 用 sessionStorage（per-tab）記錄本分頁登入者，供分頁關閉/重整時清理
+      try { sessionStorage.setItem('hrapp_session', JSON.stringify({currentUser: userId})); } catch(e) {}
       enterMainView(user);
     }
   );
@@ -1456,7 +1156,7 @@ function logout() {
   if (user && user.role !== 'admin') _markOffline(user.id);
   state.currentUser = null;
   state.pendingBets = [];
-  try { localStorage.removeItem('hrapp_local'); } catch(e) {}
+  try { sessionStorage.removeItem('hrapp_session'); } catch(e) {}
   document.getElementById('main-view').style.display='none';
   document.getElementById('login-view').style.display='';
   renderLogin();
@@ -1603,13 +1303,38 @@ function _startCountdownDisplay() {
   _countdownInterval = setInterval(() => {
     const el = document.getElementById('countdown-' + activeRace.id);
     if (!el) { clearInterval(_countdownInterval); _countdownInterval = null; return; }
-    const left = Math.max(0, closeAt - Date.now());
+    // 加上 cap：若倒數超過 AUTO_CLOSE_MINUTES（裝置時鐘偏差造成），顯示上限值而非異常數字
+    const maxMs = AUTO_CLOSE_MINUTES * 60 * 1000;
+    const rawLeft = closeAt - Date.now();
+    const left = Math.max(0, Math.min(rawLeft, maxMs));
     const mm = String(Math.floor(left / 60000)).padStart(2, '0');
     const ss = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
     el.textContent = left > 0 ? `⏱ 下注截止倒數：${mm}:${ss}` : '⏱ 下注已截止';
     el.style.color = left < 60000 ? '#dc2626' : left < 120000 ? '#d97706' : '';
     if (left === 0) { clearInterval(_countdownInterval); _countdownInterval = null; }
   }, 1000);
+}
+
+// ── 取得當前場次各馬與前一場的賠率對照 map（以 position 對齊）──
+// 回傳 { horseId: prevOdds } 或 null（第一場/無前場）
+function getPrevOddsMap(race) {
+  const idx = state.races.findIndex(r => r.id === race.id);
+  if (idx <= 0) return null;
+  const prevRace = state.races[idx - 1];
+  if (!prevRace || !prevRace.horses) return null;
+  const map = {};
+  race.horses.forEach((h, i) => {
+    const ph = prevRace.horses[i];
+    if (ph) map[h.id] = ph.odds;
+  });
+  return map;
+}
+
+// 回傳賠率變化顯示 HTML（小字）
+function oddsArrow(cur, prev) {
+  if (prev == null || prev === cur) return '';
+  if (cur < prev) return `<span style="color:#16a34a;font-size:0.85em;"> ▼${cur}x</span>`;
+  return `<span style="color:#dc2626;font-size:0.85em;"> ▲${cur}x</span>`;
 }
 
 function raceCard(race) {
@@ -1645,6 +1370,7 @@ function raceCard(race) {
   // ── 隊伍視圖：可點擊賭盤 ──
   const myLocked  = state.bets.filter(b=>b.userId===state.currentUser&&b.raceId===race.id&&!b.settled);
   const myPending = (state.pendingBets||[]).filter(b=>b.raceId===race.id);
+  const prevOddsMap = getPrevOddsMap(race); // 前場賠率對照 map
 
   // 獨贏格子
   const winCells = race.horses.map((h,i)=>{
@@ -1655,9 +1381,15 @@ function raceCard(race) {
     else if(lk) { bg='#2563eb';tc='#fff';br='#2563eb';cur='default'; }
     else if(!canBet){ bg='#f3f4f6';tc='#9ca3af';br='#e5e7eb'; }
     const oc = canBet&&!lk ? `onclick="openBet('${race.id}','${h.id}','win')"` : '';
+    const prev = prevOddsMap?.[h.id];
+    const hasChange = prev != null && prev !== h.odds;
+    const arrowColor = hasChange ? (h.odds < prev ? '#16a34a' : '#dc2626') : '';
     return `<div class="win-cell" style="background:${bg};color:${tc};border:1.5px solid ${br};border-radius:8px;padding:8px 4px;text-align:center;cursor:${cur};flex:0 0 auto;width:72px;user-select:none;" ${oc}>
       <div class="wc-num" style="font-size:calc(9px * var(--font-multiplier));font-weight:700;line-height:1.3;word-break:break-all;padding:0 2px;">${resultMap[h.id]||''}${h.name}</div>
-      <div class="wc-odds" style="font-size:calc(13px * var(--font-multiplier));font-weight:700;line-height:1.3;margin-top:2px;">${h.odds}x</div>
+      ${hasChange ? `<div style="font-size:calc(9px * var(--font-multiplier));opacity:0.5;text-decoration:line-through;line-height:1.2;">${prev}x</div>` : ''}
+      <div class="wc-odds" style="font-size:calc(13px * var(--font-multiplier));font-weight:700;line-height:1.3;margin-top:1px;${hasChange?`color:${arrowColor};`:''}">
+        ${hasChange ? (h.odds<prev?'▼':'▲') : ''}${h.odds}x
+      </div>
       ${pd?`<div style="font-size:calc(10px * var(--font-multiplier));margin-top:2px;">✏️${pd.amount}</div>`:''}
       ${lk?`<div style="font-size:calc(10px * var(--font-multiplier));margin-top:2px;">✔${lk.amount}</div>`:''}
     </div>`;
@@ -1680,7 +1412,13 @@ function raceCard(race) {
       const pdList = myPending.filter(b=>b.type==='quinella'&&[b.horseId,b.horseId2].includes(h1.id)&&[b.horseId,b.horseId2].includes(h2.id));
       const pd = pdList[0]||null;
       const odds = getQuinellaOdds(race, h1.id, h2.id);
-      const qArr = '';
+      // 連贏箭頭：前場同位置馬匹的連贏賠率（公式重算）
+      const ph1 = prevOddsMap ? (state.races[state.races.findIndex(r=>r.id===race.id)-1]?.horses?.[i]) : null;
+      const ph2 = prevOddsMap ? (state.races[state.races.findIndex(r=>r.id===race.id)-1]?.horses?.[idx+1]) : null;
+      const prevQ = (ph1 && ph2) ? Math.round((ph1.odds * ph2.odds) / 2 * 10) / 10 : null;
+      const qArr = (prevQ != null && prevQ !== odds)
+        ? `<br><span style="font-size:calc(9px * var(--font-multiplier));color:${odds<prevQ?'#16a34a':'#dc2626'};">${odds<prevQ?'▼':'▲'}${odds}x</span>`
+        : '';
       let bg='#f5f3ff',tc='#5b21b6',br='#ddd6fe',cur=canBet?'pointer':'default';
       if(pd)       { bg='#d97706';tc='#fff';br='#d97706'; }
       else if(lk)  { bg='#7c3aed';tc='#fff';br='#7c3aed';cur='default'; }
@@ -1815,6 +1553,13 @@ function openBet(raceId, horseId, type='win', horseId2=null) {
   if(tabsEl) tabsEl.style.display = 'none';
 
   updatePayout();
+  // 顯示可用資產
+  const _avPts = document.getElementById('modal-available-pts');
+  if (_avPts) {
+    const _pendingUsed = (state.pendingBets||[]).reduce((s,b)=>s+b.amount,0);
+    const _avail = user.points - _pendingUsed;
+    _avPts.textContent = `可用資產：${_avail} pts`;
+  }
   document.getElementById('bet-modal').classList.add('open');
 }
 
@@ -1850,19 +1595,20 @@ function _getMinBet(type) {
 function _refreshChips(type) {
   const row = document.getElementById('chip-row');
   if (!row) return;
+  // 統一使用累加模式（addChip），「清除」仍用 setChip(0)
   if (type === 'quinella') {
     row.innerHTML =
-      `<button class="chip" onclick="setChip(200)">200</button>
-       <button class="chip" onclick="setChip(500)">500</button>
-       <button class="chip" onclick="setChip(1000)">1000</button>
-       <button class="chip" onclick="setChip(2000)">2000</button>
+      `<button class="chip" onclick="addChip(200)">+200</button>
+       <button class="chip" onclick="addChip(500)">+500</button>
+       <button class="chip" onclick="addChip(1000)">+1000</button>
+       <button class="chip" onclick="addChip(2000)">+2000</button>
        <button class="chip" onclick="setChip(0)">清除</button>`;
   } else {
     row.innerHTML =
-      `<button class="chip" onclick="setChip(100)">100</button>
-       <button class="chip" onclick="setChip(200)">200</button>
-       <button class="chip" onclick="setChip(500)">500</button>
-       <button class="chip" onclick="setChip(1000)">1000</button>
+      `<button class="chip" onclick="addChip(200)">+200</button>
+       <button class="chip" onclick="addChip(500)">+500</button>
+       <button class="chip" onclick="addChip(1000)">+1000</button>
+       <button class="chip" onclick="addChip(2000)">+2000</button>
        <button class="chip" onclick="setChip(0)">清除</button>`;
   }
 }
@@ -1883,7 +1629,12 @@ function enforceMinBet() {
 
 function addChip(n) {
   const inp = document.getElementById('modal-amount');
-  inp.value = (parseInt(inp.value)||0) + n;
+  const user = getUser();
+  // 計算可用資產上限（扣除其他待送注單）
+  const otherPending = (state.pendingBets||[]).reduce((s,b)=>s+b.amount,0);
+  const maxAllowed = user ? Math.max(0, user.points - otherPending) : Infinity;
+  const newVal = Math.min((parseInt(inp.value)||0) + n, maxAllowed);
+  inp.value = newVal;
   updatePayout();
 }
 function setChip(n) {
@@ -1992,6 +1743,16 @@ function updatePayout() {
   if(!state.pendingBet) return;
   const race = state.races.find(r=>r.id===state.pendingBet.raceId);
   const amount = parseInt(document.getElementById('modal-amount').value)||0;
+  const user = getUser();
+
+  // 同步更新可用資產顯示（扣除所有待送注單，非本次修改的部分）
+  const avEl = document.getElementById('modal-available-pts');
+  if (avEl && user) {
+    const pendingTotal = (state.pendingBets||[]).reduce((s,b)=>s+b.amount,0);
+    const avail = user.points - pendingTotal;
+    avEl.textContent = `可用資產：${avail} pts`;
+    avEl.style.color = avail <= 0 ? '#dc2626' : '#6b7280';
+  }
 
   if(state.currentBetType === 'quinella') {
     const h1Id = document.getElementById('modal-horse1').value;
@@ -2210,10 +1971,50 @@ function renderSlip() {
     ${pendingSlipsHtml}
   ` : '';
 
+  // ── 依場次分組（待結算 + 已結算合併）──
+  const allBets = [...locked, ...settled]; // locked 在前（未結算），settled 在後（已結算）
+  // 依場次 ID 分組，保留原始場次順序（state.races 順序）
+  const raceOrder = state.races.map(r => r.id);
+  const betsByRace = {};
+  allBets.forEach(b => {
+    if (!betsByRace[b.raceId]) betsByRace[b.raceId] = [];
+    betsByRace[b.raceId].push(b);
+  });
+  // 依場次順序排列（有下注的場次），最新在最前
+  const raceGroups = raceOrder.filter(id => betsByRace[id]).reverse();
+
+  const groupsHtml = raceGroups.map((raceId, gi) => {
+    const race = state.races.find(r => r.id === raceId) || {name:'未知賽事', id: raceId};
+    const bets = betsByRace[raceId];
+    const isLatest = gi === 0;
+    const groupId = 'slip-grp-' + raceId;
+    const lockedCount = bets.filter(b => !b.settled).length;
+    const settledCount = bets.filter(b => b.settled).length;
+    const totalChange = bets.filter(b => b.settled).reduce((s, b) => s + (b.won ? b.payout : -b.amount), 0);
+    const statusTag = lockedCount > 0
+      ? `<span style="font-size:calc(10px * var(--font-multiplier));background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:10px;font-weight:600;">待結算 ${lockedCount} 注</span>`
+      : (totalChange >= 0
+          ? `<span style="font-size:calc(10px * var(--font-multiplier));background:#dcfce7;color:#166534;padding:2px 7px;border-radius:10px;font-weight:600;">+${totalChange}</span>`
+          : `<span style="font-size:calc(10px * var(--font-multiplier));background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:10px;font-weight:600;">${totalChange}</span>`);
+    return `
+      <div style="border:1px solid var(--color-border-secondary);border-radius:12px;margin-bottom:10px;overflow:hidden;">
+        <div onclick="document.getElementById('${groupId}').style.display=document.getElementById('${groupId}').style.display==='none'?'':'none';this.querySelector('.slip-arrow').textContent=document.getElementById('${groupId}').style.display==='none'?'▶':'▼'"
+          style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--color-background-secondary);cursor:pointer;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+            <span class="slip-arrow" style="font-size:calc(10px * var(--font-multiplier));color:#6b7280;">${isLatest?'▼':'▶'}</span>
+            <span style="font-size:calc(13px * var(--font-multiplier));font-weight:700;color:var(--color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${race.name}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">${statusTag}</div>
+        </div>
+        <div id="${groupId}" style="display:${isLatest?'':'none'};padding:10px 10px 4px;">
+          ${bets.map(betSlip).join('')}
+        </div>
+      </div>`;
+  }).join('');
+
   el.innerHTML = `
     ${pendingSection}
-    ${locked.length?`<p class="section-title">🕒 待結算 (${locked.length})</p>${locked.map(betSlip).join('')}`:''}
-    ${settled.length?`<p class="section-title">✅ 已結算</p>${settled.map(betSlip).join('')}`:''}
+    ${allBets.length ? groupsHtml : ''}
   `;
 }
 
@@ -2329,60 +2130,112 @@ function renderHistory() {
     return;
   }
 
-  const myBets = state.bets.filter(b=>b.userId===state.currentUser&&b.settled).reverse();
-  if(!myBets.length) { el.innerHTML='<div class="empty-state">📂 暫無結算紀錄</div>'; return; }
-  el.innerHTML = `<p class="section-title">📜 歷史結算紀錄</p>
-  <div style="background:var(--color-background-primary); border-radius:var(--border-radius-md); padding: 0 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); border: 1px solid var(--color-border-secondary);">
-    ${myBets.map((bet, i)=>{
-      const race = state.races.find(r=>r.id===bet.raceId)||{name:'未知'};
-      const horse = (race.horses||[]).find(h=>h.id===bet.horseId)||{name:'未知'};
-      const typeLabel = bet.type==='win'?'獨贏':'連贏';
+  const myBets = state.bets.filter(b => b.userId === state.currentUser && b.settled);
+  if (!myBets.length) { el.innerHTML = '<div class="empty-state">📂 暫無結算紀錄</div>'; return; }
+
+  // 依場次分組，按 state.races 順序，最新場在最前
+  const raceOrder = state.races.map(r => r.id);
+  const betsByRace = {};
+  myBets.forEach(b => {
+    if (!betsByRace[b.raceId]) betsByRace[b.raceId] = [];
+    betsByRace[b.raceId].push(b);
+  });
+  const raceGroups = raceOrder.filter(id => betsByRace[id]).reverse();
+
+  const groupsHtml = raceGroups.map((raceId, gi) => {
+    const race = state.races.find(r => r.id === raceId) || {name:'未知賽事'};
+    const bets = betsByRace[raceId];
+    const isLatest = gi === 0;
+    const groupId = 'hist-grp-' + raceId;
+    const totalChange = bets.reduce((s, b) => s + (b.won ? b.payout : -b.amount), 0);
+    const changeColor = totalChange >= 0 ? '#16a34a' : '#dc2626';
+    const changeBg = totalChange >= 0 ? '#dcfce7' : '#fee2e2';
+    const changeText = totalChange >= 0 ? `+${totalChange}` : `${totalChange}`;
+
+    const rows = bets.slice().reverse().map((bet, i) => {
+      const horse = (race.horses||[]).find(h => h.id === bet.horseId) || {name:'未知'};
+      const horse2 = bet.type === 'quinella' ? ((race.horses||[]).find(h => h.id === bet.horseId2) || {name:'?'}) : null;
+      const typeLabel = bet.type === 'win' ? '獨贏' : '連贏';
+      const horseName = bet.type === 'quinella' ? `${horse.name} + ${horse2.name}` : horse.name;
       const change = bet.won ? bet.payout : -bet.amount;
-      return `<div class="history-row" style="${i===myBets.length-1?'border:none;':''}">
-        <div class="history-meta">${race.name} · ${typeLabel}</div>
+      return `<div class="history-row" style="${i === bets.length - 1 ? 'border:none;' : ''}">
+        <div class="history-meta">${typeLabel}${bet.forced ? ' <span style="font-size:calc(9px * var(--font-multiplier));background:#fee2e2;color:#dc2626;padding:1px 4px;border-radius:3px;">強制</span>' : ''}</div>
         <div class="history-main">
-          <div class="history-desc">${horse.name} · <span style="color:var(--color-text-secondary); font-size:calc(13px * var(--font-multiplier)); font-weight:normal;">下注 ${bet.amount}</span></div>
-          <div class="history-amount" style="color:var(--color-text-${change>=0?'success':'danger'})">${change>=0?'+':''}${change}</div>
+          <div class="history-desc">${horseName} · <span style="color:var(--color-text-secondary);font-size:calc(13px * var(--font-multiplier));font-weight:normal;">下注 ${bet.amount}</span></div>
+          <div class="history-amount" style="color:${change>=0?'var(--color-text-success)':'var(--color-text-danger)'};">${change>=0?'+':''}${change}</div>
         </div>
       </div>`;
-    }).join('')}
-  </div>`;
+    }).join('');
+
+    return `
+      <div style="border:1px solid var(--color-border-secondary);border-radius:12px;margin-bottom:10px;overflow:hidden;">
+        <div onclick="var b=document.getElementById('${groupId}');b.style.display=b.style.display==='none'?'':'none';this.querySelector('.hist-arrow').textContent=b.style.display==='none'?'▶':'▼'"
+          style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--color-background-secondary);cursor:pointer;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+            <span class="hist-arrow" style="font-size:calc(10px * var(--font-multiplier));color:#6b7280;">${isLatest?'▼':'▶'}</span>
+            <span style="font-size:calc(13px * var(--font-multiplier));font-weight:700;color:var(--color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${race.name}</span>
+          </div>
+          <span style="font-size:calc(12px * var(--font-multiplier));font-weight:700;color:${changeColor};background:${changeBg};padding:2px 8px;border-radius:10px;flex-shrink:0;">${changeText}</span>
+        </div>
+        <div id="${groupId}" style="display:${isLatest?'':'none'};background:var(--color-background-primary);padding:0 16px;">
+          ${rows}
+        </div>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `<p class="section-title">📜 歷史結算紀錄</p>${groupsHtml}`;
 }
 
 function renderAdmin() {
   const el = document.getElementById('page-admin');
   const activeRace = state.races.find(r => r.id === state.activeRaceId);
 
-  // ── 隊伍下注概況 ──
-  let playerBetsOverviewHtml = '<div class="empty-state" style="padding:20px 0;">目前無人下注，或未指定賽事</div>';
-  if (activeRace) {
-    const activeBets = state.bets.filter(b => b.raceId === activeRace.id);
-    if (activeBets.length > 0) {
-      playerBetsOverviewHtml = activeRace.horses.map(h => {
-        const hBets = activeBets.filter(b => b.horseId === h.id);
-        if (!hBets.length) return '';
-        let totalH = 0;
-        const details = hBets.map(b => {
-          totalH += b.amount;
-          const u = state.users.find(u2 => u2.id === b.userId) || {name:'未知'};
-          const uTeam = u.teamId ? (state.teams||[]).find(t=>t.id===u.teamId) : null;
-          const uLabel = uTeam ? `${uTeam.name}・${u.name}` : u.name;
-          return `<div style="display:flex;justify-content:space-between;font-size:calc(13px * var(--font-multiplier));color:var(--color-text-secondary);padding:4px 0;">
-            <span>👤 ${uLabel} (${b.type==='win'?'獨贏':'連贏'})</span>
-            <span style="font-weight:500;color:var(--color-text-primary);">${b.amount} pts</span>
-          </div>`;
-        }).join('');
-        return `<div style="background:var(--color-background-secondary);border-radius:var(--border-radius-sm);padding:12px;margin-bottom:10px;">
-          <div style="font-weight:600;font-size:calc(14px * var(--font-multiplier));margin-bottom:8px;display:flex;justify-content:space-between;">
-            <span>🐎 ${h.name}</span><span style="color:var(--primary);">共押 ${totalH} pts</span>
-          </div>
-          <div style="border-top:1px dashed #d1d5db;margin-bottom:6px;"></div>
-          ${details}
+  // ── 座位狀態（在線 / 離線 & 下注組合明細）──
+  const allPlayers = state.users.filter(u => u.role !== 'admin');
+  const activeRaceForSeats = state.races.find(r => r.id === state.activeRaceId);
+  const seatRows = allPlayers.map(p => {
+    const online = !!_activeSessions[p.id];
+    const team = p.teamId ? (state.teams||[]).find(t => t.id === p.teamId) : null;
+    const playerBets = activeRaceForSeats
+      ? state.bets.filter(b => b.userId === p.id && b.raceId === activeRaceForSeats.id)
+      : [];
+    const totalBet = playerBets.reduce((s, b) => s + b.amount, 0);
+
+    // 每注組合明細
+    let betDetail = '';
+    if (!activeRaceForSeats) {
+      betDetail = `<span style="color:#d1d5db;font-size:calc(11px * var(--font-multiplier));">無進行中賽事</span>`;
+    } else if (playerBets.length === 0) {
+      betDetail = `<span style="color:#9ca3af;font-size:calc(11px * var(--font-multiplier));">未下注</span>`;
+    } else {
+      const horses = activeRaceForSeats.horses || [];
+      const betItems = playerBets.map(b => {
+        const h1 = horses.find(h => h.id === b.horseId);
+        const h2 = b.horseId2 ? horses.find(h => h.id === b.horseId2) : null;
+        const label = b.type === 'quinella'
+          ? `🔗 ${h1?.name||'?'} + ${h2?.name||'?'}`
+          : `🥇 ${h1?.name||'?'}`;
+        const forcedTag = b.forced ? `<span style="background:#fee2e2;color:#dc2626;font-size:calc(9px * var(--font-multiplier));padding:1px 4px;border-radius:3px;font-weight:700;margin-left:3px;">強制</span>` : '';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;">
+          <span style="color:#374151;font-size:calc(11px * var(--font-multiplier));">${label}${forcedTag}</span>
+          <span style="color:#16a34a;font-weight:600;font-size:calc(11px * var(--font-multiplier));margin-left:8px;white-space:nowrap;">${b.amount} pts</span>
         </div>`;
       }).join('');
-      if (!playerBetsOverviewHtml.trim()) playerBetsOverviewHtml = '<div class="empty-state" style="padding:20px 0;">目前無人下注</div>';
+      betDetail = `<div style="border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;">${betItems}<div style="border-top:1px dashed #e5e7eb;margin-top:3px;padding-top:3px;display:flex;justify-content:space-between;"><span style="font-size:calc(11px * var(--font-multiplier));color:#6b7280;">合計</span><span style="font-size:calc(11px * var(--font-multiplier));font-weight:700;color:#16a34a;">${totalBet} pts</span></div></div>`;
     }
-  }
+
+    return `<div style="padding:8px 10px;border-radius:8px;background:${online?'#f0fdf4':'#f9fafb'};border:1px solid ${online?'#bbf7d0':'#e5e7eb'};margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:10px;height:10px;border-radius:50%;background:${online?'#16a34a':'#d1d5db'};flex-shrink:0;"></div>
+        <div style="flex:1;min-width:0;">
+          <span style="font-size:calc(13px * var(--font-multiplier));font-weight:600;color:var(--color-text-primary);">${p.name}</span>${team?` <span style="font-size:calc(10px * var(--font-multiplier));color:var(--color-text-secondary);">${team.name}</span>`:''}
+        </div>
+        <div style="font-size:calc(11px * var(--font-multiplier));color:${online?'#15803d':'#9ca3af'};">${online?'🟢 線上':'⚫ 離線'}</div>
+      </div>
+      ${betDetail}
+    </div>`;
+  }).join('') || '<div style="color:var(--color-text-secondary);font-size:calc(13px * var(--font-multiplier));padding:10px 0;">尚未建立玩家</div>';
+  const seatHtml = `<div>${seatRows}</div>`;
 
   // ── 全域二重彩賠率（用索引 key）──
   const labelTdW = 'width:16%;min-width:52px;';
@@ -2404,9 +2257,7 @@ function renderAdmin() {
   el.innerHTML = `
     <!-- 快速跳轉導覽列 -->
     <div style="display:flex;flex-wrap:wrap;gap:6px;padding:12px 0 8px;border-bottom:1px solid var(--color-border-tertiary);margin-bottom:4px;">
-      <a href="#admin-sec-bets-anchor"    style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#374151;text-decoration:none;font-weight:600;">📊 下注概況</a>
       <a href="#admin-sec-horses-anchor"  style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#374151;text-decoration:none;font-weight:600;">🐎 馬匹設定</a>
-      <a href="#admin-broadcast-anchor"   style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#374151;text-decoration:none;font-weight:600;">📹 直播</a>
       <a href="#admin-create-race-anchor" style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#374151;text-decoration:none;font-weight:600;">➕ 建立賽事</a>
       <a href="#admin-settle-anchor"      style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#374151;text-decoration:none;font-weight:600;">📢 結果公布</a>
       <a href="#admin-danger-anchor"      style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#fee2e2;border-radius:20px;color:#dc2626;text-decoration:none;font-weight:600;">🗑️ 危險區域</a>
@@ -2451,10 +2302,10 @@ function renderAdmin() {
       <p style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-info);margin-top:8px;opacity:0.8;">隊伍只會看到你在此處選擇的那一場賽事。</p>
     </div>
 
-    <!-- 📊 隊伍下注概況（可收放）-->
-    <div id="admin-sec-bets-anchor" class="admin-card" style="margin-top:8px;">
-      ${adminSectionHeader('bets','📊','隊伍下注概況（目前賽事）')}
-      ${adminSectionBody('bets', playerBetsOverviewHtml)}
+    <!-- 🪑 座位狀態（可收放）-->
+    <div class="admin-card" style="margin-top:8px;">
+      ${adminSectionHeader('seats','🪑','座位狀態 & 本場下注金額')}
+      ${adminSectionBody('seats', seatHtml)}
     </div>
 
     <!-- 🐎 馬匹名稱及賠率（可收放，全域設定）-->
@@ -2487,36 +2338,6 @@ function renderAdmin() {
           </table>
         </div>
       `)}
-    </div>
-
-    <!-- 📹 直播控制 -->
-    <p id="admin-broadcast-anchor" class="section-title">📹 直播控制</p>
-    <div class="admin-card">
-      ${_isBroadcasting ? `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <div class="live-dot"></div>
-          <span style="font-size:calc(14px * var(--font-multiplier));font-weight:700;color:#ef4444;">直播進行中</span>
-          <span style="font-size:calc(12px * var(--font-multiplier));color:var(--color-text-secondary);margin-left:4px;">觀看者裝置會自動顯示畫面</span>
-        </div>
-        <video id="broadcast-preview" autoplay playsinline muted style="width:100%;border-radius:8px;background:#000;max-height:180px;object-fit:cover;display:block;margin-bottom:10px;"></video>
-        <!-- 縮放控制（僅支援的裝置才顯示） -->
-        <div id="zoom-wrap" style="display:none;margin-bottom:12px;background:#f8f8f8;border-radius:8px;padding:10px 14px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-            <span style="font-size:calc(12px * var(--font-multiplier));font-weight:600;color:#374151;">🔍 鏡頭縮放</span>
-            <span id="zoom-label" style="font-size:calc(13px * var(--font-multiplier));font-weight:700;color:var(--primary);min-width:36px;text-align:right;">1.0x</span>
-          </div>
-          <input id="zoom-slider" type="range" min="1" max="10" step="0.1" value="1"
-            oninput="setBroadcastZoom(this.value)"
-            style="width:100%;accent-color:var(--primary);cursor:pointer;">
-        </div>
-        <button onclick="stopBroadcast()" style="width:100%;padding:12px;background:#ef4444;color:#fff;border:none;border-radius:var(--border-radius-sm);font-size:calc(14px * var(--font-multiplier));font-weight:700;cursor:pointer;">⏹️ 停止直播</button>
-      ` : `
-        <div style="font-size:calc(13px * var(--font-multiplier));color:var(--color-text-secondary);margin-bottom:12px;line-height:1.6;">
-          點擊開始，此裝置的攝影機畫面將即時傳送到所有觀看者裝置。<br>
-          <span style="color:#16a34a;font-weight:600;">✓ 僅需同一 WiFi，完全免費</span>
-        </div>
-        <button onclick="startBroadcast()" style="width:100%;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:var(--border-radius-sm);font-size:calc(14px * var(--font-multiplier));font-weight:700;cursor:pointer;">📹 開始直播</button>
-      `}
     </div>
 
     <!-- ➕ 建立多場賽事 -->
@@ -2648,8 +2469,6 @@ function renderAdmin() {
       </div>`;
     }).join('')}` : ''}
   `;
-  // 直播進行中時，重新渲染後重新附加攝影機串流到預覽元素
-  _syncBroadcastPreview();
   // 確保懸浮按鈕存在並啟用
   _ensureAdminBackTopBtn();
 }
@@ -2947,7 +2766,7 @@ function _forceBetsForRace(race) {
 
   if (changed) {
     savePartial({ bets: state.bets, users: state.users });
-    if (notif.length) toast('🤖 強制下注已補足：' + notif.join('、'));
+    // 強制下注通知不顯示（避免長字串溢出 toast）
     const activeTab = document.querySelector('.tab.active');
     if (activeTab) renderPage(activeTab.dataset.tab);
   }
@@ -3470,6 +3289,52 @@ function clearAllData() {
 // ============================================================
 let _prevRaceStatuses = {};
 
+// ── 開局賠率彈窗 ──
+function showOddsPreview(race) {
+  if (!race || !race.horses) return;
+  const user = getUser();
+  if (!user || user.role === 'admin') return;
+
+  const nameEl = document.getElementById('odds-preview-race-name');
+  const bodyEl = document.getElementById('odds-preview-body');
+  if (!nameEl || !bodyEl) return;
+
+  nameEl.textContent = race.name;
+
+  // 前場賠率對照（位置對齊）
+  const pMap = getPrevOddsMap(race);
+
+  // 獨贏賠率列表（含箭頭）
+  const winRows = race.horses.map(h => {
+    const prev = pMap?.[h.id];
+    let arrow = '';
+    if (prev != null && prev !== h.odds) {
+      const dir = h.odds < prev ? '▼' : '▲';
+      const col = h.odds < prev ? '#16a34a' : '#dc2626';
+      arrow = `<span style="font-size:calc(11px * var(--font-multiplier));color:#9ca3af;text-decoration:line-through;margin-right:4px;">${prev}x</span>`
+            + `<span style="font-weight:700;color:${col};">${dir}${h.odds}x</span>`;
+    } else {
+      arrow = `<span style="font-weight:700;color:#2563eb;">${h.odds}x</span>`;
+    }
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-radius:8px;margin-bottom:4px;background:#f8fafc;">
+      <span style="font-weight:600;color:#1e293b;">${h.name}</span>
+      <span>${arrow}</span>
+    </div>`;
+  }).join('');
+
+  bodyEl.innerHTML = `
+    <div style="font-weight:700;color:#374151;margin-bottom:8px;font-size:calc(12px * var(--font-multiplier));">🥇 獨贏賠率${pMap ? '（← 前場）' : ''}</div>
+    ${winRows}
+    <div style="font-size:calc(11px * var(--font-multiplier));color:#9ca3af;margin-top:10px;text-align:center;">連贏賠率請查看下方下注格</div>
+  `;
+
+  document.getElementById('odds-preview-overlay').classList.add('opo-active');
+}
+
+function closeOddsPreview() {
+  document.getElementById('odds-preview-overlay').classList.remove('opo-active');
+}
+
 function showRaceResultAnimation(race) {
   const overlay = document.getElementById('race-result-overlay');
   const track   = document.getElementById('rro-track');
@@ -3683,14 +3548,15 @@ STATE_REF.on('value', snapshot => {
     });
 
     // 每次開啟網址都從登入畫面開始，不恢復上次的登入狀態
-    // 若上次有殘留 session 標記，先清除（避免自己被鎖定）
+    // 用 sessionStorage（per-tab）追蹤本分頁的 currentUser，
+    // 避免同一瀏覽器不同分頁互相清除對方的 session（localStorage 是跨分頁共享的）
     try {
-      const local = JSON.parse(localStorage.getItem('hrapp_local') || '{}');
-      if (local.currentUser) {
-        const prevUser = state.users.find(u => u.id === local.currentUser);
-        if (prevUser && prevUser.role !== 'admin') _markOffline(local.currentUser);
+      const sess = JSON.parse(sessionStorage.getItem('hrapp_session') || '{}');
+      if (sess.currentUser) {
+        const prevUser = state.users.find(u => u.id === sess.currentUser);
+        if (prevUser && prevUser.role !== 'admin') _markOffline(sess.currentUser);
       }
-      localStorage.removeItem('hrapp_local');
+      sessionStorage.removeItem('hrapp_session');
     } catch(e) {}
     state.currentUser = null;
     state.pendingBets = [];
@@ -3717,24 +3583,32 @@ STATE_REF.on('value', snapshot => {
     const pb = state.pendingBet;
     const bt = state.currentBetType;
 
+    // 注意：races / bets 改為無條件覆寫（含空陣列），
+    // 避免 Firebase 刪除欄位（空陣列存為 null）時，本機殘留舊資料再被 save() 寫回。
     if (data.users) state.users = _toArray(data.users);
-    state.teams = _toArray(data.teams);
-    if (data.races) state.races = _toArray(data.races);
-    if (data.bets) state.bets = _toArray(data.bets);
+    state.teams  = _toArray(data.teams);
+    state.races  = _toArray(data.races);   // 即使 data.races 為 null 也要清空
+    state.bets   = _toArray(data.bets);    // 同上
     if (data.activeRaceId !== undefined) state.activeRaceId = data.activeRaceId;
+    else state.activeRaceId = null;        // Firebase 刪除欄位時主動歸 null
     if (data.requirePassword !== undefined) state.requirePassword = data.requirePassword;
 
     state.currentUser = cu;
     state.pendingBet = pb;
     state.currentBetType = bt;
 
-    // ── 偵測剛結束的比賽 → 非管理員顯示結果動畫 ──
+    // ── 偵測剛結束 / 剛開啟的比賽 → 非管理員顯示對應動畫 ──
     const _me = state.currentUser ? state.users.find(u=>u.id===state.currentUser) : null;
     if (_me && _me.role !== 'admin' && data.races) {
       data.races.forEach(race => {
-        const wasFinished = (_prevRaceStatuses[race.id] === 'finished');
-        if (race.status === 'finished' && !wasFinished && race.result) {
+        const prevStatus = _prevRaceStatuses[race.id];
+        // 結果動畫
+        if (race.status === 'finished' && prevStatus !== 'finished' && race.result) {
           showRaceResultAnimation(race);
+        }
+        // 開局賠率彈窗：新賽事（之前不存在）或狀態從非 open 變 open
+        if (race.status === 'open' && prevStatus === undefined) {
+          setTimeout(() => showOddsPreview(race), 400);
         }
         _prevRaceStatuses[race.id] = race.status;
       });
@@ -3858,6 +3732,18 @@ function adminSectionBody(key, html) {
       </div>
     </div>
     <button class="rro-close-btn" onclick="closeRaceResultAnimation()">✅ 確認</button>
+  </div>
+</div>
+
+<!-- 開局賠率彈窗 -->
+<div id="odds-preview-overlay">
+  <div id="odds-preview-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:calc(16px * var(--font-multiplier));font-weight:800;color:#1e40af;">📊 本場賠率</div>
+      <div id="odds-preview-race-name" style="font-size:calc(12px * var(--font-multiplier));color:#6b7280;"></div>
+    </div>
+    <div id="odds-preview-body" style="font-size:calc(13px * var(--font-multiplier));"></div>
+    <button onclick="closeOddsPreview()" style="margin-top:16px;width:100%;padding:12px 0;background:#2563eb;color:#fff;border:none;border-radius:12px;font-size:calc(14px * var(--font-multiplier));font-weight:700;cursor:pointer;">✅ 了解！開始下注</button>
   </div>
 </div>
 
