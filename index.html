@@ -307,7 +307,9 @@
   /* ===== 轉盤覆蓋層 ===== */
   #wheel-overlay {
     display: none; position: fixed; inset: 0;
-    background: radial-gradient(circle at 50% 50%, #e0e5ec 0%, #c1c8d4 100%);
+    background:
+      linear-gradient(rgba(224,229,236,0.70), rgba(193,200,212,0.70)),
+      url('racing-bg.jpg') center / cover no-repeat;
     z-index: 8000; overflow: hidden; touch-action: none;
     flex-direction: column; align-items: center; justify-content: center;
   }
@@ -337,9 +339,19 @@
   }
   #jackpot-banner {
     background: linear-gradient(135deg, #c71585, #ff1493); color: #fff;
-    padding: 10px 25px; border-radius: 30px; font-size: 18px; font-weight: 900;
+    padding: 10px 0; border-radius: 30px; font-size: 18px; font-weight: 900;
     letter-spacing: 2px; margin-bottom: 30px; box-shadow: 0 5px 15px rgba(199,21,133,0.4);
-    border: 2px solid #fff; text-align: center; animation: pulseBanner 2s infinite; z-index: 100;
+    border: 2px solid #fff; overflow: hidden; white-space: nowrap; z-index: 100;
+    position: relative; width: 680px; max-width: 680px; align-self: center;
+  }
+  #jackpot-banner-inner {
+    display: inline-block;
+    padding-left: 100%;
+    animation: marqueeScroll 22s linear infinite;
+  }
+  @keyframes marqueeScroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
   }
   @keyframes pulseBanner {
     0%,100% { transform: scale(1);    box-shadow: 0 5px 15px rgba(199,21,133,0.4); }
@@ -459,44 +471,17 @@
   .jp-list-num  { font-size: 10px; color: #888; min-width: 16px; }
   .jp-list-name { font-size: 13px; font-weight: 700; color: #fff; flex: 1; }
   .jp-list-icon { font-size: 14px; }
-  #jp-cheat-btn {
-    position: absolute; bottom: 110px; right: 30px; width: 65px; height: 65px;
-    border-radius: 50%; background: #333; color: #fff; border: 3px solid #555;
-    font-size: 22px; cursor: pointer; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 1px;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.4); z-index: 500;
-    transition: all 0.25s; user-select: none;
-  }
-  #jp-cheat-btn.active {
-    background: linear-gradient(135deg, #c71585, #ff4500);
-    border-color: #ffd700;
-    box-shadow: 0 0 18px rgba(199,21,133,0.8), 0 5px 20px rgba(0,0,0,0.4);
-    animation: cheatPulse 1.2s infinite alternate;
-  }
-  @keyframes cheatPulse {
-    from { box-shadow: 0 0 12px rgba(199,21,133,0.7), 0 5px 20px rgba(0,0,0,0.4); }
-    to   { box-shadow: 0 0 28px rgba(255,69,0,1),    0 5px 20px rgba(0,0,0,0.4); }
-  }
-  #jp-cheat-btn .cheat-label { font-size: 9px; font-weight: 900; letter-spacing: 0.5px; opacity: 0.85; }
+  /* JP cheat btn removed */
   #wheel-overlay #wh-game-panel { display: flex; flex-direction: column; align-items: center; position: relative; width: 100%; }
-  @media (max-width: 900px) {
-    #wheel-and-result { flex-direction: column; gap: 0; }
-    #wh-container { width: 380px; height: 380px; }
-    .wh-outer-text { top: 18px; transform-origin: 50% 172px; font-size: 16px; }
-    .wh-inner-text { top: 30px; transform-origin: 50% 118px; font-size: 13px; }
-    .wh-peg { transform-origin: 50% 190px; }
+  /* 轉盤尺寸統一由 _fitWheelToViewport() JS 處理，不再用 media query 縮小 */
+  /* 小螢幕：結果卡改為疊在轉盤上方 */
+  @media (max-width: 700px) {
     #wh-result-card {
       position: absolute; top: 50%; left: 50%; margin: 0;
       width: 85%; max-width: 340px; padding: 25px 15px;
       transform: translate(-50%, -40%) scale(0.8); z-index: 400;
     }
     #wh-result-card.show { transform: translate(-50%, -50%) scale(1); }
-  }
-  @media (max-height: 720px) {
-    #wh-container { width: 320px; height: 320px; }
-    .wh-outer-text { top: 15px; transform-origin: 50% 145px; font-size: 14px; }
-    .wh-inner-text { top: 25px; transform-origin: 50% 100px; font-size: 11px; }
-    .wh-peg { transform-origin: 50% 160px; }
   }
   /* ===== JACKPOT 隊伍小轉盤 ===== */
   #jp-overlay {
@@ -519,7 +504,13 @@
 
   #jp-confetti { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
 
-  #jp-inner { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; }
+  #jp-inner { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 0; }
+  #jp-main-area { display: flex; flex-direction: row; align-items: center; gap: 50px; }
+  #jp-right-panel {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    width: 340px; flex-shrink: 0;
+  }
+  #jp-btn-group { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
 
   #jp-title {
     font-size: 28px; font-weight: 900; letter-spacing: 4px; text-align: center;
@@ -534,35 +525,37 @@
   #jp-sub-title { font-size: 13px; color: #7ecfff; margin-bottom: 14px; text-align: center; opacity:.8; }
 
   #jp-wheel-wrap {
-    position: relative; width: 280px; height: 280px;
-    filter: drop-shadow(0 0 18px rgba(0,200,255,0.7));
+    position: relative; width: 600px; height: 600px;
+    filter: drop-shadow(0 0 28px rgba(0,200,255,0.7));
   }
   #jp-canvas { display: block; border-radius: 50%; cursor: pointer; }
   #jp-pointer-top {
-    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+    position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
     width: 0; height: 0;
-    border-left: 13px solid transparent; border-right: 13px solid transparent;
-    border-top: 26px solid #00ffff;
-    filter: drop-shadow(0 0 8px #00ffff); z-index: 10;
+    border-left: 18px solid transparent; border-right: 18px solid transparent;
+    border-top: 38px solid #fff;
+    filter: drop-shadow(0 0 10px rgba(0,200,255,0.9)); z-index: 10;
   }
-  #jp-spin-hint { font-size: 13px; color: #444; margin-top: 8px; }
-
+  #jp-spin-hint {
+    font-size: 18px; color: #7ecfff; margin: 0; text-align: center;
+    letter-spacing: 1px; opacity: 0.9;
+    text-shadow: 0 0 10px rgba(0,200,255,0.5);
+  }
   /* 舊 result div（隱藏，保留相容） */
   #jp-result { display: none; }
 
-  /* ── 得獎卡片 ── */
+  /* ── 得獎卡片（右側，放大版）── */
   #jp-winner-card {
-    display: none; margin-top: 18px; text-align: center;
+    display: none; text-align: center; width: 100%;
     background: linear-gradient(135deg, rgba(0,15,60,0.97) 0%, rgba(0,5,25,0.97) 100%);
     border: 2px solid transparent;
-    border-radius: 24px; padding: 28px 44px 24px;
+    border-radius: 28px; padding: 36px 32px 32px;
     position: relative; overflow: hidden;
     animation: cardReveal 0.7s cubic-bezier(.175,.885,.32,1.275);
-    box-shadow: 0 0 40px rgba(0,200,255,0.35), 0 0 80px rgba(100,0,255,0.15);
+    box-shadow: 0 0 50px rgba(0,200,255,0.4), 0 0 100px rgba(100,0,255,0.2);
   }
-  /* 彩虹邊框 */
   #jp-winner-card::before {
-    content:''; position:absolute; inset:-2px; border-radius:26px; z-index:-1;
+    content:''; position:absolute; inset:-2px; border-radius:30px; z-index:-1;
     background: linear-gradient(135deg,#00ffff,#ff00ff,#ffd700,#00ff88,#00ffff);
     background-size: 300% 300%; animation: borderSpin 3s linear infinite;
   }
@@ -571,39 +564,39 @@
     from { opacity:0; transform: scale(0.4) translateY(30px); }
     to   { opacity:1; transform: scale(1)   translateY(0);    }
   }
-  #jp-winner-crown { font-size: 52px; display: block; animation: crownBounce 0.8s ease; }
+  #jp-winner-crown { font-size: 72px; display: block; animation: crownBounce 0.8s ease; }
   @keyframes crownBounce { 0%{transform:scale(0) rotate(-30deg);} 70%{transform:scale(1.2) rotate(5deg);} 100%{transform:scale(1) rotate(0);} }
   #jp-winner-label {
-    font-size: 13px; letter-spacing: 3px; color: #00ffff;
-    text-transform: uppercase; margin: 6px 0 4px; opacity: .8;
+    font-size: 15px; letter-spacing: 4px; color: #00ffff;
+    margin: 10px 0 6px; opacity: .85;
     text-shadow: 0 0 8px #00ffff;
   }
   #jp-winner-name {
-    font-size: 40px; font-weight: 900; display: block; margin: 4px 0 8px;
+    font-size: 52px; font-weight: 900; display: block; margin: 6px 0 12px;
     background: linear-gradient(90deg,#ffd700,#ff8c00,#ffe44d,#ffd700);
     background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     animation: shimmerText 1.5s linear infinite;
-    text-shadow: none; filter: drop-shadow(0 0 12px rgba(255,200,0,0.7));
+    filter: drop-shadow(0 0 14px rgba(255,200,0,0.8));
   }
   #jp-winner-prize {
-    font-size: 15px; color: #ff88ff; font-weight: 700;
+    font-size: 17px; color: #ff88ff; font-weight: 700;
     text-shadow: 0 0 10px #ff00ff; letter-spacing: 1px;
   }
 
   #jp-close-btn {
-    margin-top: 18px; padding: 13px 40px;
+    padding: 15px 0; width: 100%;
     background: linear-gradient(135deg, #00ffff, #0088ff);
     color: #000; border: none; border-radius: 30px;
-    font-size: 17px; font-weight: 900; cursor: pointer;
+    font-size: 18px; font-weight: 900; cursor: pointer;
     box-shadow: 0 4px 24px rgba(0,200,255,0.5); display: none;
     transition: transform .12s;
   }
-  #jp-close-btn:hover { transform: scale(1.06); }
+  #jp-close-btn:hover { transform: scale(1.04); }
   #jp-spin-btn {
-    margin-top: 12px; padding: 10px 28px;
+    padding: 12px 0; width: 100%;
     background: rgba(255,255,255,0.1); color: #aaa;
     border: 1px solid rgba(255,255,255,0.2); border-radius: 30px;
-    font-size: 15px; font-weight: bold; cursor: pointer;
+    font-size: 16px; font-weight: bold; cursor: pointer;
     display: none; transition: background .2s;
   }
   #jp-spin-btn:hover { background: rgba(255,255,255,0.18); }
@@ -620,6 +613,9 @@
     <polyline points="18 15 12 9 6 15"/>
   </svg>
 </button>
+
+<!-- 版本號 -->
+<div style="position:fixed;bottom:8px;right:12px;z-index:9000;font-size:10px;color:rgba(0,0,0,0.2);pointer-events:none;font-weight:600;letter-spacing:0.5px;user-select:none;">v1.0.0</div>
 
 <div class="app" id="app">
   <div id="login-view"></div>
@@ -2262,6 +2258,16 @@ function renderAdmin() {
       <a href="#admin-settle-anchor"      style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#f3f4f6;border-radius:20px;color:#374151;text-decoration:none;font-weight:600;">📢 結果公布</a>
       <a href="#admin-danger-anchor"      style="font-size:calc(11px * var(--font-multiplier));padding:4px 10px;background:#fee2e2;border-radius:20px;color:#dc2626;text-decoration:none;font-weight:600;">🗑️ 危險區域</a>
       <div style="flex:1;display:flex;justify-content:flex-end;gap:8px;align-items:center;">
+        <!-- JP 必中燈號（左=關/右=開，無任何文字） -->
+        <button id="jp-cheat-toggle" onclick="toggleJpCheat()" title="轉盤測試模式"
+          style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;
+                 background:#1f2937;border:1.5px solid #374151;border-radius:20px;
+                 cursor:pointer;flex-shrink:0;vertical-align:middle;transition:border-color 0.2s;">
+          <span id="_jct_off" style="display:block;width:11px;height:11px;border-radius:50%;
+            background:#4b5563;transition:all 0.25s;"></span>
+          <span id="_jct_on"  style="display:block;width:11px;height:11px;border-radius:50%;
+            background:#1f2937;border:1.5px solid #374151;transition:all 0.25s;"></span>
+        </button>
         <button onclick="openWheel()" style="padding:6px 14px;background:#f5f3ff;color:#7c3aed;border:1px solid #c4b5fd;border-radius:var(--border-radius-sm);font-size:calc(12px * var(--font-multiplier));font-weight:600;cursor:pointer;">🎡 轉盤</button>
         <button onclick="logout()" style="padding:6px 14px;background:var(--color-background-secondary);color:var(--color-text-secondary);border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-sm);font-size:calc(12px * var(--font-multiplier));font-weight:600;cursor:pointer;">🚪 登出</button>
       </div>
@@ -2485,6 +2491,7 @@ function createRace() {
   if (state.races.length > 0) { toast('⚠️ 已有賽事，請從「▶ 開啟下一場」建立後續場次'); return; }
   const prefix = (document.getElementById('new-race-prefix').value || '').trim();
   if (!prefix) { toast('請輸入賽事名稱前綴'); return; }
+  _jpFiredRaceId = null;  // 新場次，重置JP鎖定
 
   const n = state.races.length + 1;
   const index = _CN_NUM[n] || String(n);
@@ -2525,6 +2532,7 @@ function createNextRace(sourceRaceId) {
   // 防呆：若目前已有進行中的賽事，禁止再開
   const hasActive = state.races.some(x => x.status === 'open' || x.status === 'closed');
   if (hasActive) { toast('⚠️ 目前已有進行中的賽事，請等該場結算後再開啟下一場'); return; }
+  _jpFiredRaceId = null;  // 新場次，重置JP鎖定
 
   const prefix = (document.getElementById('new-race-prefix')?.value || '').trim() || getDefaultRacePrefix();
 
@@ -3791,7 +3799,9 @@ function adminSectionBody(key, html) {
   </div>
 
   <div id="wh-game-panel">
-    <div id="jackpot-banner">✨ 雙向同步啟動：外圈選對象 / 內圈抽命運 ✨</div>
+    <div id="jackpot-banner">
+      <span id="jackpot-banner-inner">💖 感謝乾爹贊助 &nbsp;｜&nbsp; 曾泉銘、楊智凱、林郁翔、林威志、侯欽文、劉俊男、曾怡君、顧心寧、李秉誠、黃靖語、簡穎如、陳威志 &nbsp;｜&nbsp; 💖 感謝乾爹贊助 &nbsp;｜&nbsp; 曾泉銘、楊智凱、林郁翔、林威志、侯欽文、劉俊男、曾怡君、顧心寧、李秉誠、黃靖語、簡穎如、陳威志</span>
+    </div>
     <div id="wheel-and-result">
       <div id="wh-container">
         <div id="wh-pointer-container">
@@ -3809,33 +3819,38 @@ function adminSectionBody(key, html) {
     </div>
   </div>
 
-  <button id="jp-cheat-btn" title="必中 JACKPOT（開啟/關閉）" onclick="toggleJpCheat()">
-    <span>✅</span>
-    <span class="cheat-label">JP必中</span>
-  </button>
   <button id="wh-reset-btn" title="重新開始">🔄</button>
 
   <!-- JACKPOT 隊伍小轉盤 -->
   <div id="jp-overlay">
     <canvas id="jp-confetti"></canvas>
     <div id="jp-inner">
-      <div id="jp-title">🎰 JACKPOT！隊伍抽獎 🎰</div>
-      <div id="jp-sub-title">轉到的隊伍可獲得本局總獎金 10%（現金獎勵）</div>
-      <div id="jp-wheel-wrap">
-        <div id="jp-pointer-top"></div>
-        <canvas id="jp-canvas" width="280" height="280"></canvas>
+      <div id="jp-title">🎰 JACKPOT！玩家抽獎 🎰</div>
+      <div id="jp-sub-title">轉到的玩家可獲得本局總獎金 10%（現金獎勵）</div>
+      <!-- 水平佈局：左轉盤 + 右面板 -->
+      <div id="jp-main-area">
+        <!-- 左：轉盤 -->
+        <div id="jp-wheel-wrap">
+          <div id="jp-pointer-top"></div>
+          <canvas id="jp-canvas" width="600" height="600"></canvas>
+        </div>
+        <!-- 右：資訊/得獎面板 -->
+        <div id="jp-right-panel">
+          <div id="jp-spin-hint">👇 點擊轉盤開始！</div>
+          <div id="jp-result"></div>
+          <!-- 得獎報獎卡片 -->
+          <div id="jp-winner-card">
+            <span id="jp-winner-crown">🏆</span>
+            <div id="jp-winner-label">🎊 獲獎玩家 🎊</div>
+            <span id="jp-winner-name">—</span>
+            <div id="jp-winner-prize">獲得本局總獎金 10%！</div>
+          </div>
+          <div id="jp-btn-group">
+            <button id="jp-spin-btn" onclick="jpSpin()">🔄 再轉一次</button>
+            <button id="jp-close-btn" onclick="closeJackpotWheel()">✅ 確認領獎</button>
+          </div>
+        </div>
       </div>
-      <div id="jp-spin-hint">點擊轉盤再次旋轉</div>
-      <div id="jp-result"></div>
-      <!-- 得獎報獎卡片 -->
-      <div id="jp-winner-card">
-        <span id="jp-winner-crown">🏆</span>
-        <div id="jp-winner-label">🎊 獲獎隊伍 🎊</div>
-        <span id="jp-winner-name">—</span>
-        <div id="jp-winner-prize">獲得本局總獎金 10%！</div>
-      </div>
-      <button id="jp-spin-btn" onclick="jpSpin()">🔄 再轉一次</button>
-      <button id="jp-close-btn" onclick="closeJackpotWheel()">✅ 確認領獎</button>
     </div>
   </div>
 </div>
@@ -3893,7 +3908,7 @@ const WH = {
 };
 
 const WH_INNER_OPTIONS = [
-  { n:'<span style="font-size:13px;letter-spacing:-0.5px;font-family:Arial,sans-serif;">JACKPOT</span>', fullName:'🎰 JACKPOT 隊伍抽獎', c:'開啟隊伍幸運轉盤，抽出總獎金 10%！', color:'#c71585' },
+  { n:'<span style="font-size:13px;letter-spacing:-0.5px;font-family:Arial,sans-serif;">JACKPOT</span>', fullName:'🎰 JACKPOT 玩家抽獎', c:'開啟玩家幸運轉盤，抽出總獎金 10%！', color:'#c71585' },
   { n:'前進一步', fullName:'前進一步', c:'穩紮穩打！', color:'#1b5e20' },
   { n:'後退一步', fullName:'後退一步', c:'倒退嚕！', color:'#b71c1c' },
   { n:'前進兩步', fullName:'前進兩步', c:'健步如飛！', color:'#1b5e20' },
@@ -3913,18 +3928,45 @@ const WH_INNER_OPTIONS = [
   { n:'後退兩步', fullName:'後退兩步', c:'慘不忍睹！', color:'#b71c1c' }
 ];
 
+// ── 轉盤自動縮放：讓轉盤永遠完整填滿 viewport，不受 browser zoom 影響 ──
+function _fitWheelToViewport() {
+  const panel = document.getElementById('wh-game-panel');
+  if (!panel) return;
+
+  // 重置 transform，量測自然尺寸
+  panel.style.transform = 'none';
+
+  // 設計基準：外圈轉盤 600px + 間距 50px + 結果卡 320px + 外邊距 = ~1020px 寬
+  //           Banner ~60px + 轉盤 600px + 上下邊距 = ~700px 高
+  const designW = 1020;
+  const designH = 700;
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  const sx = (vw * 0.97) / designW;
+  const sy = (vh * 0.96) / designH;
+  const scale = Math.min(sx, sy, 1.5);  // 最多放大 1.5× (投影用)
+
+  panel.style.transform = `scale(${scale})`;
+  panel.style.transformOrigin = 'center center';
+}
+
 function openWheel() {
   // 從 DEFAULT_HORSES 取最新馬匹名稱（與下注系統同步）
   const names = DEFAULT_HORSES.slice(0, 8).map(h => h.name);
   whInitWheel(names);
   _jpRenderList(); // 同步顯示 JP 得獎記錄
   document.getElementById('wheel-overlay').classList.add('open');
+  requestAnimationFrame(_fitWheelToViewport); // 開啟後立即縮放適應
 }
 
 function closeWheel() {
   document.getElementById('wheel-overlay').classList.remove('open');
   WH.isSpinning = false; WH.velOuter = 0; WH.velInner = 0;
   cancelAnimationFrame(WH.animationId);
+  const panel = document.getElementById('wh-game-panel');
+  if (panel) panel.style.transform = 'none';
 }
 
 function whInitWheel(outerOptions) {
@@ -4034,27 +4076,53 @@ function whStartSpin(power) {
   WH.animationId = requestAnimationFrame(loop);
 }
 
+// ── JP 必中測試模式 ──
 var WH_JP_CHEAT = false;
 function toggleJpCheat() {
   WH_JP_CHEAT = !WH_JP_CHEAT;
-  var btn = document.getElementById('jp-cheat-btn');
-  btn.classList.toggle('active', WH_JP_CHEAT);
-  btn.querySelector('span').textContent = WH_JP_CHEAT ? '🎰' : '✅';
-  toast(WH_JP_CHEAT ? '🎰 JP必中模式 已開啟' : '✅ JP必中模式 已關閉');
+  var offDot = document.getElementById('_jct_off');
+  var onDot  = document.getElementById('_jct_on');
+  var btn    = document.getElementById('jp-cheat-toggle');
+  if (WH_JP_CHEAT) {
+    if (offDot) { offDot.style.background = '#374151'; offDot.style.boxShadow = 'none'; }
+    if (onDot)  { onDot.style.background  = '#22c55e'; onDot.style.boxShadow  = '0 0 7px #22c55e'; }
+    if (btn)    { btn.style.borderColor = '#22c55e'; }
+  } else {
+    if (offDot) { offDot.style.background = '#4b5563'; offDot.style.boxShadow = 'none'; }
+    if (onDot)  { onDot.style.background  = '#1f2937'; onDot.style.boxShadow  = 'none'; onDot.style.border = '1.5px solid #374151'; }
+    if (btn)    { btn.style.borderColor = '#374151'; }
+  }
 }
+
+// ── JP 每場限中一次：記錄已中JP的場次ID ──
+var _jpFiredRaceId = null;  // 記住哪場已中過JP，null = 本場還沒中
 
 function whStopGame() {
   WH.isSpinning = false; WH.velOuter = 0; WH.velInner = 0;
   cancelAnimationFrame(WH.animationId);
-  // 必中 JP 作弊：強制內圈角度落在 index 0（JACKPOT）
+
+  // ── 必中模式（測試用）：強制落在 idx 0（JACKPOT） ──
+  // ptrAngle for idx 0 center = 10°  → angleInner%360 = 360-10 = 350
   if (WH_JP_CHEAT) {
-    // whPtrAngle(a) = ((360-(a%360))+360)%360；要讓結果=10（slot 0 中央）
-    // → a%360 = 350，取最近的整數圈數
     var fullRounds = Math.floor(WH.angleInner / 360);
     WH.angleInner = fullRounds * 360 + 350;
     document.getElementById('wh-inner').style.transition = 'transform 0.4s cubic-bezier(0.25,0.1,0.25,1)';
     document.getElementById('wh-inner').style.transform = 'rotate(' + WH.angleInner + 'deg)';
   }
+  // ── 若本場已中過JP（且非必中模式），強制把內圈轉離第0格（JACKPOT），落在第1格中央 ──
+  else {
+    const currentRaceId = state.activeRaceId;
+    if (_jpFiredRaceId !== null && _jpFiredRaceId === currentRaceId) {
+      const tentativeIdx = Math.floor(whPtrAngle(WH.angleInner) / 20) % 18;
+      if (tentativeIdx === 0) {
+        var fullRounds = Math.floor(WH.angleInner / 360);
+        WH.angleInner = fullRounds * 360 + 330;  // 落在 idx 1 中央
+        document.getElementById('wh-inner').style.transition = 'transform 0.35s cubic-bezier(0.25,0.1,0.25,1)';
+        document.getElementById('wh-inner').style.transform = 'rotate(' + WH.angleInner + 'deg)';
+      }
+    }
+  }
+
   const innerEl = document.getElementById('wh-inner');
   const slipped = whApplySlip('inner', WH.angleInner, 20);
   if (slipped) {
@@ -4090,9 +4158,9 @@ function whStopGame() {
     document.getElementById('wh-outer').style.transition = 'none';
     innerEl.style.transition = 'none';
 
-    // JACKPOT → 開隊伍小轉盤
+    // JACKPOT → 開隊伍小轉盤（本場限中一次）
     if (idxInner === 0) {
-      // 先短暫顯示主結果卡，再跳出 JP 轉盤
+      _jpFiredRaceId = state.activeRaceId;  // 標記本場已中JP
       card.classList.add('show');
       setTimeout(function() { openJackpotWheel(resOuter); }, 800);
     } else {
@@ -4139,6 +4207,16 @@ document.getElementById('wheel-info-modal').addEventListener('mousedown', functi
     document.getElementById('wheel-info-modal').classList.add('hidden');
 });
 
+// 視窗大小改變時（包含外接螢幕解析度切換）重新計算轉盤縮放
+window.addEventListener('resize', function() {
+  if (document.getElementById('wheel-overlay').classList.contains('open')) {
+    _fitWheelToViewport();
+  }
+  if (document.getElementById('jp-overlay').classList.contains('open')) {
+    _fitJpToViewport();
+  }
+});
+
 // ===== JACKPOT 隊伍小轉盤 =====
 var JP = {
   isSpinning: false, angle: 0, vel: 0, animId: null,
@@ -4150,6 +4228,23 @@ var JP_COLORS = [
   '#2980b9','#d35400','#27ae60','#7f8c8d','#e91e63'
 ];
 
+// ── JP 轉盤自動縮放：讓 JP 轉盤填滿 viewport ──
+function _fitJpToViewport() {
+  var inner = document.getElementById('jp-inner');
+  if (!inner) return;
+  inner.style.transform = 'none';
+  var vw = window.innerWidth;
+  var vh = window.innerHeight;
+  // 設計基準：轉盤(600)+間距(50)+右側面板(340) = ~990px 寬，標題(80)+轉盤(600) = ~700px 高
+  var designW = 1010;
+  var designH = 710;
+  var sx = (vw * 0.96) / designW;
+  var sy = (vh * 0.96) / designH;
+  var scale = Math.min(sx, sy, 1.4);
+  inner.style.transform = 'scale(' + scale + ')';
+  inner.style.transformOrigin = 'center center';
+}
+
 function openJackpotWheel(winningHorse) {
   // 從 state.users 取非管理者隊伍名稱
   var players = [];
@@ -4158,11 +4253,11 @@ function openJackpotWheel(winningHorse) {
       if (u.role !== 'admin' && u.name) players.push(u.name);
     });
   }
-  if (players.length === 0) players = ['隊伍'];
+  if (players.length === 0) players = ['玩家'];
 
   JP.players  = players;
   JP.colors   = players.map(function(_, i) { return JP_COLORS[i % JP_COLORS.length]; });
-  JP.angle    = 0;
+  JP.angle    = Math.random() * 360;  // 隨機起始角度，避免每局第一轉落點相似
   JP.vel      = 0;
   JP.isSpinning = false;
   JP.winningHorse = winningHorse;
@@ -4174,8 +4269,10 @@ function openJackpotWheel(winningHorse) {
   document.getElementById('jp-overlay').classList.add('open');
 
   jpDrawWheel();
-  // 自動開始旋轉
-  setTimeout(jpSpin, 500);
+  requestAnimationFrame(_fitJpToViewport);  // 開啟後縮放適應
+  // 不自動旋轉，等待玩家點擊轉盤或「再轉一次」按鈕
+  document.getElementById('jp-spin-hint').style.display = 'block';
+  document.getElementById('jp-spin-btn').style.display  = 'inline-block';
 }
 
 function jpDrawWheel() {
@@ -4186,71 +4283,114 @@ function jpDrawWheel() {
   if (n === 0) return;
   var sliceDeg = 360 / n;
   var cx = canvas.width / 2, cy = canvas.height / 2;
-  var r  = canvas.width / 2 - 3;
+  var outerR  = canvas.width / 2 - 2;   // 最外緣半徑
+  var borderW = 20;                       // 白色外框寬度
+  var r       = outerR - borderW;        // 扇形繪製半徑
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // 外圈底色
+  ctx.beginPath();
+  ctx.arc(cx, cy, outerR, 0, 2 * Math.PI);
+  ctx.fillStyle = '#2c3e50';
+  ctx.fill();
+
+  // ── 扇形（第一遍）──
   for (var i = 0; i < n; i++) {
     var startRad = (JP.angle + i * sliceDeg - 90) * Math.PI / 180;
     var endRad   = startRad + sliceDeg * Math.PI / 180;
-
-    // 扇形
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, r, startRad, endRad);
     ctx.closePath();
-    ctx.fillStyle = JP.colors[i];
+    ctx.fillStyle = JP.colors[i % JP.colors.length];
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
     ctx.lineWidth = 2;
     ctx.stroke();
+  }
 
-    // 隊伍名稱文字（橫向書寫，置於扇形中央）
-    var midRad = startRad + (sliceDeg / 2) * Math.PI / 180;
-    var fontSize = Math.max(11, Math.min(18, Math.floor(180 / n)));
-    var textR = r * 0.62;
-    var tx = cx + textR * Math.cos(midRad);
-    var ty = cy + textR * Math.sin(midRad);
+  // ── 文字（第二遍，各自獨立 clip）──
+  for (var i = 0; i < n; i++) {
+    var startRad = (JP.angle + i * sliceDeg - 90) * Math.PI / 180;
+    var endRad   = startRad + sliceDeg * Math.PI / 180;
+    var midRad   = (startRad + endRad) / 2;
+
+    var text = (JP.players[i] || '').trim();
+    if (!text) continue;
+    var chars    = text.split('');
+    var fontSize = Math.max(13, Math.min(24, Math.floor(r * 0.46 / chars.length)));
+    var charH    = fontSize * 1.35;
+
     ctx.save();
-    ctx.translate(tx, ty);
-    ctx.textAlign = 'center';
+
+    // clip 在 translate 之前設定（座標系原點仍在 canvas 左上角）
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 2, 0, 2 * Math.PI);
+    ctx.clip();
+
+    // ── 關鍵修正：rotate(midRad + π/2) 才能讓 local (0,-d) 落在扇形外緣方向 ──
+    // 數學推導：translate(cx,cy)+rotate(θ) 後，local (0,-d) 的 canvas 位置 =
+    //   (cx + d·sinθ, cy - d·cosθ)
+    // 要讓此點落在 midRad 方向：需 d·sin θ / d·cos θ = tan(midRad) →
+    //   解得 θ = midRad + π/2（local -Y 指向扇形外緣）
+    ctx.translate(cx, cy);
+    ctx.rotate(midRad + Math.PI / 2);
+
+    ctx.font         = 'bold ' + fontSize + 'px sans-serif';
+    ctx.fillStyle    = '#fff';
+    ctx.strokeStyle  = 'rgba(0,0,0,0.75)';
+    ctx.lineWidth    = 3;
+    ctx.lineJoin     = 'round';
+    ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold ' + fontSize + 'px sans-serif';
-    ctx.shadowColor = 'rgba(0,0,0,0.7)';
-    ctx.shadowBlur  = 5;
-    ctx.fillText(JP.players[i], 0, 0);
+
+    // 文字列置中在扇形外段（0.25r ~ 0.82r），midR 提高至 0.65 讓整欄偏向外圈
+    var midR   = r * 0.65;
+    var startY = -(midR + (chars.length - 1) * charH * 0.5);
+    for (var ci = 0; ci < chars.length; ci++) {
+      var cy2 = startY + ci * charH;
+      ctx.strokeText(chars[ci], 0, cy2);
+      ctx.fillText(chars[ci], 0, cy2);
+    }
+
     ctx.restore();
   }
 
+  // 白色外框環（覆蓋在扇形之上）
+  ctx.beginPath();
+  ctx.arc(cx, cy, outerR - borderW / 2, 0, 2 * Math.PI);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = borderW;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, outerR - 1, 0, 2 * Math.PI);
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
   // 中心圓
-  ctx.beginPath();
-  ctx.arc(cx, cy, 22, 0, 2 * Math.PI);
-  ctx.fillStyle = '#fff';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(cx, cy, 15, 0, 2 * Math.PI);
-  ctx.fillStyle = '#ffd700';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(cx, cy, 7, 0, 2 * Math.PI);
-  ctx.fillStyle = '#333';
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, 28, 0, 2*Math.PI); ctx.fillStyle = '#fff';    ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, 18, 0, 2*Math.PI); ctx.fillStyle = '#ffd700'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy,  9, 0, 2*Math.PI); ctx.fillStyle = '#333';    ctx.fill();
 }
 
 function jpSpin() {
   if (JP.isSpinning) return;
   JP.isSpinning = true;
-  JP.vel = 18 + Math.random() * 12;
+
   document.getElementById('jp-result').textContent = '';
   document.getElementById('jp-close-btn').style.display = 'none';
   document.getElementById('jp-spin-btn').style.display  = 'none';
   document.getElementById('jp-spin-hint').style.display = 'none';
 
-  var decel = 0.984 + Math.random() * 0.006; // 0.984 ~ 0.990 → 讓每次停法不同
+  JP.vel   = 10 + Math.random() * 85;           // 初速 10~95
+  JP.decel = 0.970 + Math.random() * 0.025;     // 減速率 0.970~0.995（存到 JP 供外部修改）
+
   function loop() {
     JP.angle = (JP.angle + JP.vel) % 360;
-    JP.vel  *= decel;
+    JP.vel  *= JP.decel;
     jpDrawWheel();
     if (JP.vel > 0.25) {
       JP.animId = requestAnimationFrame(loop);
@@ -4265,9 +4405,30 @@ function jpSpin() {
 function jpShowResult() {
   var n = JP.players.length;
   var sliceDeg = 360 / n;
-  var ptrAngle = (360 - JP.angle % 360) % 360;
-  var winIdx   = Math.floor(ptrAngle / sliceDeg) % n;
-  var winner   = JP.players[winIdx];
+
+  // ── 由停止角度計算得獎索引 ──
+  var ptrInSlice = ((-JP.angle) % 360 + 360) % 360;
+  var winIdx     = Math.floor(ptrInSlice / sliceDeg) % n;
+  var winner     = JP.players[winIdx];
+
+  // ── 金色高亮（debug 視覺確認）──
+  (function() {
+    var canvas = document.getElementById('jp-canvas');
+    if (!canvas) return;
+    var ctx    = canvas.getContext('2d');
+    var cx = canvas.width / 2, cy = canvas.height / 2;
+    var outerR = canvas.width / 2 - 2;
+    var r      = outerR - 20;
+    var sRad   = (JP.angle + winIdx * sliceDeg - 90) * Math.PI / 180;
+    var eRad   = sRad + sliceDeg * Math.PI / 180;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, sRad, eRad);
+    ctx.closePath();
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth   = 5;
+    ctx.stroke();
+  })();
 
   // 填入得獎卡片
   document.getElementById('jp-winner-name').textContent = winner;
@@ -4355,9 +4516,14 @@ function closeJackpotWheel() {
 
 // 點擊轉盤可再次旋轉
 document.getElementById('jp-canvas').addEventListener('click', function() {
-  if (!JP.isSpinning) jpSpin();
+  if (!JP.isSpinning) {
+    jpSpin();
+  } else {
+    // 旋轉中點擊 → 加快減速（每次點擊讓 decel 降低，轉盤更快停下）
+    JP.decel = Math.max(0.88, JP.decel * 0.88);
+  }
 });
 </script>
 
 </body>
-</html>                 
+</html>                 
